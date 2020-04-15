@@ -36,7 +36,6 @@ fn main() {
     loop {
         match rx.next() {
             Ok(packet) => {
-                let mut container: NetworkRecord = NetworkRecord::default();
                 let frame: Frame = process_packet(packet);
 
                 println!("{:#?}", frame);

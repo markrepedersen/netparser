@@ -16,9 +16,9 @@ use ux::*;
 #[derive(Debug, TryFromPrimitive)]
 #[repr(u8)]
 pub enum Protocol {
-    ICMP = 0x01,
-    TCP = 0x06,
-    UDP = 0x11,
+    ICMP = 1,
+    TCP = 6,
+    UDP = 17,
 }
 
 impl Protocol {
@@ -74,9 +74,14 @@ impl Packet {
 
         let (i, protocol) = Protocol::parse(i)?;
         let (i, checksum) = be_u16(i)?;
-	
-        let (i, src) = Addr::parse(i)?;
-        let (i, dst) = Addr::parse(i)?;
+
+        let (i, (src, dst)) = tuple((Addr::parse, Addr::parse))(i)?;
+
+	// TODO: parse udp/tcp/icmp... etc packets.
+        // let (i, payload) = match protocol {
+        //     Some(Protocol::ICMP) => map(icmp::Packet::parse, Payload::ICMP)(i)?,
+        //     _ => (i, Payload::Unknown),
+        // };
 
         let res = Self {
             version,
