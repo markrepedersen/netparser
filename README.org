@@ -2,10 +2,21 @@
 A package for sniffing network traffic. This repository also contains a parsing library for extending other libraries as well as an Emacs package for displaying in-buffer network traffic.
 
 * Instructions
+** Installation
 #+begin_src bash
 git clone https://github.com/markrepedersen/mp_sniff.git
-cd <path/to/repo> 
-cargo run
+cargo build
+#+end_src
+
+For using as a library, see src/lib.rs for available entry points.
+
+For running the binary to view network traffic, see below.
+
+** Running
+See src/bin/main.rs for available filtering options.
+
+#+begin_src bash
+cargo run -- <options>
 #+end_src
 
 * Emacs
