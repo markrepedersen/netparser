@@ -8,15 +8,13 @@ git clone https://github.com/markrepedersen/mp_sniff.git
 cargo build
 #+end_src
 
-For using as a library, see src/lib.rs for available entry points.
-
-For running the binary to view network traffic, see below.
+For using as a library, see lib/netparse for available entry points.
 
 ** Running
-See src/bin/main.rs for available filtering options.
+Running the binary:
 
 #+begin_src bash
-cargo run -- <options>
+cargo run -p netparser -- <options>
 #+end_src
 
 * Emacs

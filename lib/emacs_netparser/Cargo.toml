@@ -1,0 +1,8 @@
+[package]
+name = "emacs_netparser"
+version = "0.1.0"
+authors = ["markpedersen"]
+edition = "2018"
+
+[dependencies]
+emacs = "0.14"

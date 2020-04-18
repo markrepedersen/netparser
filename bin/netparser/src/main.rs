@@ -1,5 +1,5 @@
 use clap::Clap;
-use mp_sniff::{run, PacketOptions};
+use netparse::{run, PacketOptions};
 
 #[derive(Clap)]
 #[clap(version = "1.0", author = "Mark Pedersen")]

@@ -1,0 +1,10 @@
+[package]
+name = "netparser"
+version = "0.1.0"
+authors = ["Mark Pedersen markrepedersen@gmail.com"]
+edition = "2018"
+description = "Binary application for sniffing network packets."
+
+[dependencies]
+clap = { git = "https://github.com/clap-rs/clap/" }
+netparse = { path = "../../lib/netparse" }
