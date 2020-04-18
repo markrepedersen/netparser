@@ -1,40 +1,40 @@
-mod arp;
-mod blob;
-mod dot11;
-mod frame;
-mod icmp;
-mod ipv4;
-mod ipv6;
-mod parse;
-mod serialize;
-mod tcp;
-mod udp;
+pub mod arp;
+pub mod blob;
+pub mod dot11;
+pub mod frame;
+pub mod icmp;
+pub mod ipv4;
+pub mod ipv6;
+pub mod parse;
+pub mod serialize;
+pub mod tcp;
+pub mod udp;
 
 use pnet::datalink;
 
 /// Show IPv4 Packets as they come through the NIC.
-fn show_ipv4(frame: frame::Frame) {
+pub fn show_ipv4(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         println!("{:#?}", ip_packet);
     }
 }
 
 /// Show IPv6 Packets as they come through the NIC.
-fn show_ipv6(frame: frame::Frame) {
+pub fn show_ipv6(frame: frame::Frame) {
     if let frame::Payload::IPv6(ref ip_packet) = frame.payload {
         println!("{:#?}", ip_packet);
     }
 }
 
 /// Show ARP Packets as they come through the NIC.
-fn show_arp(frame: frame::Frame) {
+pub fn show_arp(frame: frame::Frame) {
     if let frame::Payload::ARP(ref ip_packet) = frame.payload {
         println!("{:#?}", ip_packet);
     }
 }
 
 /// Show TCP Packets as they come through the NIC.
-fn show_tcp(frame: frame::Frame) {
+pub fn show_tcp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ipv4::Payload::TCP(ref tcp_packet) = ip_packet.payload {
             println!("{:#?}", tcp_packet);
@@ -43,7 +43,7 @@ fn show_tcp(frame: frame::Frame) {
 }
 
 /// Show UDP Packets as they come through the NIC.
-fn show_udp(frame: frame::Frame) {
+pub fn show_udp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ipv4::Payload::UDP(ref udp_packet) = ip_packet.payload {
             println!("{:#?}", udp_packet);
@@ -52,7 +52,7 @@ fn show_udp(frame: frame::Frame) {
 }
 
 /// Show ICMP Packets as they come through the NIC.
-fn show_icmp(frame: frame::Frame) {
+pub fn show_icmp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ipv4::Payload::ICMP(ref icmp_packet) = ip_packet.payload {
             println!("{:#?}", icmp_packet);
