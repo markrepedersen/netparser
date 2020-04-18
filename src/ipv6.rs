@@ -4,10 +4,9 @@ use custom_debug_derive::*;
 use nom::{
     bytes::complete::take,
     error::context,
-    number::complete::{be_u16, be_u32, be_u8},
+    number::complete::{be_u16, be_u8},
 };
 use std::fmt;
-use ux::*;
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
 pub struct Addr(pub [u8; 16]);
@@ -46,8 +45,11 @@ impl Addr {
 
 #[derive(CustomDebug)]
 pub struct Packet {
+    #[debug(format = "{}")]
     payload_len: u16,
+    #[debug(format = "{}")]
     next_header: u8,
+    #[debug(format = "{}")]
     ttl: u8,
     src: Addr,
     dst: Addr,
@@ -55,21 +57,22 @@ pub struct Packet {
 
 impl Packet {
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        let (i, _) = take(4usize)(i)?;
+        context("IPv6 frame", |i| {
+            let (i, _) = take(4usize)(i)?;
+            let (i, payload_len) = be_u16(i)?;
+            let (i, next_header) = be_u8(i)?;
+            let (i, ttl) = be_u8(i)?;
+            let (i, src) = Addr::parse(i)?;
+            let (i, dst) = Addr::parse(i)?;
+            let res = Self {
+                payload_len,
+                next_header,
+                ttl,
+                src,
+                dst,
+            };
 
-        let (i, payload_len) = be_u16(i)?;
-        let (i, next_header) = be_u8(i)?;
-        let (i, ttl) = be_u8(i)?;
-        let (i, src) = Addr::parse(i)?;
-        let (i, dst) = Addr::parse(i)?;
-        let res = Self {
-            payload_len,
-            next_header,
-            ttl,
-            src,
-            dst,
-        };
-
-        Ok((i, res))
+            Ok((i, res))
+        })(i)
     }
 }

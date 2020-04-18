@@ -1,4 +1,8 @@
-use crate::parse::{self, BitParsable};
+use crate::{
+    icmp,
+    parse::{self, BitParsable},
+    tcp, udp,
+};
 
 use custom_debug_derive::*;
 use derive_try_from_primitive::*;
@@ -29,19 +33,23 @@ impl Protocol {
 
 #[derive(Debug)]
 pub enum Payload {
+    UDP(udp::Datagram),
+    TCP(tcp::Packet),
+    ICMP(icmp::Packet),
     Unknown,
 }
 
 #[derive(CustomDebug)]
 pub struct Packet {
-    #[debug(skip)]
+    #[debug(format = "{:x}")]
     pub version: u4,
-    #[debug(format = "{}")]
+    #[debug(format = "{:x}")]
     pub ihl: u4,
     #[debug(format = "{:x}")]
     pub dscp: u6,
-    #[debug(format = "{:b}")] // ECN uses two bits
+    #[debug(format = "{:b}")]
     pub ecn: u2,
+    #[debug(format = "{}")]
     pub length: u16,
     #[debug(format = "{:04x}")]
     pub identification: u16,
@@ -55,51 +63,47 @@ pub struct Packet {
     pub dst: Addr,
     #[debug(skip)]
     pub checksum: u16,
-    #[debug(skip)]
     pub protocol: Option<Protocol>,
-    payload: Payload,
+    pub payload: Payload,
 }
 
 impl Packet {
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        let (i, (version, ihl)) = bits(tuple((u4::parse, u4::parse)))(i)?;
+        context("IPv4 frame", |i| {
+            let (i, (version, ihl)) = bits(tuple((u4::parse, u4::parse)))(i)?;
+            let (i, (dscp, ecn)) = bits(tuple((u6::parse, u2::parse)))(i)?;
+            let (i, length) = be_u16(i)?;
+            let (i, identification) = be_u16(i)?;
+            let (i, (flags, fragment_offset)) = bits(tuple((u3::parse, u13::parse)))(i)?;
+            let (i, ttl) = be_u8(i)?;
+            let (i, protocol) = Protocol::parse(i)?;
+            let (i, checksum) = be_u16(i)?;
+            let (i, (src, dst)) = tuple((Addr::parse, Addr::parse))(i)?;
+            let (i, payload) = match protocol {
+                Some(Protocol::TCP) => map(tcp::Packet::parse, Payload::TCP)(i)?,
+                Some(Protocol::UDP) => map(udp::Datagram::parse, Payload::UDP)(i)?,
+                Some(Protocol::ICMP) => map(icmp::Packet::parse, Payload::ICMP)(i)?,
+                _ => (i, Payload::Unknown),
+            };
 
-        let (i, (dscp, ecn)) = bits(tuple((u6::parse, u2::parse)))(i)?;
-        let (i, length) = be_u16(i)?;
-
-        let (i, identification) = be_u16(i)?;
-        let (i, (flags, fragment_offset)) = bits(tuple((u3::parse, u13::parse)))(i)?;
-
-        let (i, ttl) = be_u8(i)?;
-
-        let (i, protocol) = Protocol::parse(i)?;
-        let (i, checksum) = be_u16(i)?;
-
-        let (i, (src, dst)) = tuple((Addr::parse, Addr::parse))(i)?;
-
-	// TODO: parse udp/tcp/icmp... etc packets.
-        // let (i, payload) = match protocol {
-        //     Some(Protocol::ICMP) => map(icmp::Packet::parse, Payload::ICMP)(i)?,
-        //     _ => (i, Payload::Unknown),
-        // };
-
-        let res = Self {
-            version,
-            ihl,
-            dscp,
-            ecn,
-            length,
-            identification,
-            flags,
-            fragment_offset,
-            ttl,
-            protocol,
-            checksum,
-            src,
-            dst,
-            payload: Payload::Unknown,
-        };
-        Ok((i, res))
+            let res = Self {
+                version,
+                ihl,
+                dscp,
+                ecn,
+                length,
+                identification,
+                flags,
+                fragment_offset,
+                ttl,
+                protocol,
+                checksum,
+                src,
+                dst,
+                payload,
+            };
+            Ok((i, res))
+        })(i)
     }
 }
 

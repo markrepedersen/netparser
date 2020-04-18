@@ -1,6 +1,13 @@
 use crate::{frame, ipv4, parse};
+
+use custom_debug_derive::*;
 use derive_try_from_primitive::*;
-use nom::{number::complete::be_u8, sequence::tuple};
+use nom::{
+    combinator::map,
+    error::context,
+    number::complete::{be_u16, be_u8},
+    sequence::tuple,
+};
 
 #[derive(Debug, TryFromPrimitive, Clone, Copy)]
 #[repr(u16)]
@@ -18,7 +25,6 @@ pub enum Operation {
 
 impl Operation {
     pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
-        use nom::{combinator::map, error::context, number::complete::be_u16};
         context("Operation", map(be_u16, Self::try_from))(i)
     }
 }
@@ -40,16 +46,19 @@ pub enum HardwareType {
 
 impl HardwareType {
     pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
-        use nom::{combinator::map, error::context, number::complete::be_u16};
-        context("HardwareType", map(be_u16, Self::try_from))(i)
+        context("Hardware type", |i| {
+            context("HardwareType", map(be_u16, Self::try_from))(i)
+        })(i)
     }
 }
 
-#[derive(Debug)]
+#[derive(CustomDebug)]
 pub struct Packet {
     pub htype: Option<HardwareType>,
     pub ptype: Option<frame::EtherType>,
+    #[debug(format = "{}")]
     pub hlen: u8,
+    #[debug(format = "{}")]
     pub plen: u8,
     pub operation: Option<Operation>,
     pub sender_hw_addr: frame::Addr,
@@ -60,28 +69,30 @@ pub struct Packet {
 
 impl Packet {
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        let (i, (htype, ptype, hlen, plen)) =
-            tuple((HardwareType::parse, frame::EtherType::parse, be_u8, be_u8))(i)?;
+        context("ARP Frame", |i| {
+            let (i, (htype, ptype, hlen, plen)) =
+                tuple((HardwareType::parse, frame::EtherType::parse, be_u8, be_u8))(i)?;
 
-        let (i, operation) = Operation::parse(i)?;
+            let (i, operation) = Operation::parse(i)?;
 
-        let (i, (sender_hw_addr, sender_ip_addr)) =
-            tuple((frame::Addr::parse, ipv4::Addr::parse))(i)?;
+            let (i, (sender_hw_addr, sender_ip_addr)) =
+                tuple((frame::Addr::parse, ipv4::Addr::parse))(i)?;
 
-        let (i, (target_hw_addr, target_ip_addr)) =
-            tuple((frame::Addr::parse, ipv4::Addr::parse))(i)?;
+            let (i, (target_hw_addr, target_ip_addr)) =
+                tuple((frame::Addr::parse, ipv4::Addr::parse))(i)?;
 
-        let res = Self {
-            htype,
-            ptype,
-            hlen,
-            plen,
-            operation,
-            sender_hw_addr,
-            sender_ip_addr,
-            target_hw_addr,
-            target_ip_addr,
-        };
-        Ok((i, res))
+            let res = Self {
+                htype,
+                ptype,
+                hlen,
+                plen,
+                operation,
+                sender_hw_addr,
+                sender_ip_addr,
+                target_hw_addr,
+                target_ip_addr,
+            };
+            Ok((i, res))
+        })(i)
     }
 }

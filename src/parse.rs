@@ -53,19 +53,10 @@ where
 pub enum ErrorKind {
     Nom(NomErrorKind),
     Context(&'static str),
-    Custom(String),
 }
 
 pub struct Error<I> {
     pub errors: Vec<(I, ErrorKind)>,
-}
-
-impl<I> Error<I> {
-    pub fn custom(input: I, msg: String) -> Self {
-        Self {
-            errors: vec![(input, ErrorKind::Custom(msg))],
-        }
-    }
 }
 
 impl<'a> fmt::Debug for Error<&'a [u8]> {
@@ -118,7 +109,6 @@ impl<'a> fmt::Debug for Error<&'a [u8]> {
             let prefix = match kind {
                 ErrorKind::Context(ctx) => format!("...in {}", ctx),
                 ErrorKind::Nom(err) => format!("nom error {:?}", err),
-                ErrorKind::Custom(s) => format!("...in {}", s),
             };
 
             write!(f, "{}\n", prefix)?;
