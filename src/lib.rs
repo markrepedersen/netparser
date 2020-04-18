@@ -10,61 +10,30 @@ mod serialize;
 mod tcp;
 mod udp;
 
-use clap::Clap;
 use pnet::datalink;
 
-#[derive(Clap)]
-#[clap(version = "1.0", author = "Mark Pedersen")]
-pub struct CLI {
-    #[clap(
-        short = "i",
-        long = "interface",
-        value_name = "name",
-        takes_value = true,
-        default_value = "en0",
-        required = true
-    )]
-    interface: String,
-    #[clap(short = "U", long = "udp")]
-    udp: bool,
-    #[clap(short = "T", long = "tcp")]
-    tcp: bool,
-    #[clap(short = "I", long = "icmp")]
-    icmp: bool,
-    #[clap(short = "A", long = "arp")]
-    arp: bool,
-    #[clap(short = "4", long = "ipv4")]
-    ipv4: bool,
-    #[clap(short = "6", long = "ipv6")]
-    ipv6: bool,
-}
-
-#[derive(Debug, Default)]
-struct NetworkRecord {
-    mac_src: String,
-    mac_dst: String,
-    ip_src: String,
-    ip_dst: String,
-}
-
+/// Show IPv4 Packets as they come through the NIC.
 fn show_ipv4(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         println!("{:#?}", ip_packet);
     }
 }
 
+/// Show IPv6 Packets as they come through the NIC.
 fn show_ipv6(frame: frame::Frame) {
     if let frame::Payload::IPv6(ref ip_packet) = frame.payload {
         println!("{:#?}", ip_packet);
     }
 }
 
+/// Show ARP Packets as they come through the NIC.
 fn show_arp(frame: frame::Frame) {
     if let frame::Payload::ARP(ref ip_packet) = frame.payload {
         println!("{:#?}", ip_packet);
     }
 }
 
+/// Show TCP Packets as they come through the NIC.
 fn show_tcp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ipv4::Payload::TCP(ref tcp_packet) = ip_packet.payload {
@@ -73,6 +42,7 @@ fn show_tcp(frame: frame::Frame) {
     }
 }
 
+/// Show UDP Packets as they come through the NIC.
 fn show_udp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ipv4::Payload::UDP(ref udp_packet) = ip_packet.payload {
@@ -81,6 +51,7 @@ fn show_udp(frame: frame::Frame) {
     }
 }
 
+/// Show ICMP Packets as they come through the NIC.
 fn show_icmp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ipv4::Payload::ICMP(ref icmp_packet) = ip_packet.payload {
@@ -89,8 +60,19 @@ fn show_icmp(frame: frame::Frame) {
     }
 }
 
-fn main() -> Result<(), std::io::Error> {
-    let opts: CLI = CLI::parse();
+/// The options of which packets to display.
+pub struct PacketOptions {
+    pub interface: String,
+    pub udp: bool,
+    pub tcp: bool,
+    pub icmp: bool,
+    pub arp: bool,
+    pub ipv4: bool,
+    pub ipv6: bool,
+}
+
+/// Run an event loop, capturing the packets as described in <PacketOptions>.
+pub fn run(opts: PacketOptions) {
     let interfaces = datalink::interfaces();
     let interface = interfaces
         .into_iter()
@@ -107,12 +89,12 @@ fn main() -> Result<(), std::io::Error> {
         match rx.next() {
             Ok(packet) => match frame::Frame::parse(packet) {
                 Ok((_remaining, frame)) => match opts {
-                    CLI { ipv4: true, .. } => show_ipv4(frame),
-                    CLI { ipv6: true, .. } => show_ipv6(frame),
-                    CLI { arp: true, .. } => show_arp(frame),
-                    CLI { tcp: true, .. } => show_tcp(frame),
-                    CLI { udp: true, .. } => show_udp(frame),
-                    CLI { icmp: true, .. } => show_icmp(frame),
+                    PacketOptions { ipv4: true, .. } => show_ipv4(frame),
+                    PacketOptions { ipv6: true, .. } => show_ipv6(frame),
+                    PacketOptions { arp: true, .. } => show_arp(frame),
+                    PacketOptions { tcp: true, .. } => show_tcp(frame),
+                    PacketOptions { udp: true, .. } => show_udp(frame),
+                    PacketOptions { icmp: true, .. } => show_icmp(frame),
                     _ => println!("{:#?}", frame),
                 },
                 Err(nom::Err::Error(e)) => println!("{:#?}", e),

@@ -1,8 +1,16 @@
 [package]
-name = "rs_wifi_deauther"
+name = "mp-sniff"
 version = "0.1.0"
 authors = ["markpedersen"]
 edition = "2018"
+
+[lib]
+name = "mp_sniff"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mp_sniff"
+path = "src/bin/main.rs"
 
 [dependencies]
 paste = "0.1.7"

@@ -1,0 +1,29 @@
+* Abstract
+A package for sniffing network traffic. This repository also contains a parsing library for extending other libraries as well as an Emacs package for displaying in-buffer network traffic.
+
+* Instructions
+#+begin_src bash
+git clone https://github.com/markrepedersen/mp_sniff.git
+cd <path/to/repo> 
+cargo run
+#+end_src
+
+* Emacs
+TBA
+
+* Limitations
+Currently only supports the following protocols:
+
+** L1/2
+- Ethernet (802.2)
+- (Depends on OS) Wifi (802.11)
+- ARP
+
+** L3
+- IPv4
+- IPv6
+
+** L4
+- UDP
+- TCP
+- ICMP
