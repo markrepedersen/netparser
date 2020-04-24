@@ -4,6 +4,7 @@ pub mod dot11;
 pub mod frame;
 pub mod hex_slice;
 pub mod icmp;
+pub mod ip;
 pub mod ipv4;
 pub mod ipv6;
 pub mod parse;
@@ -56,7 +57,7 @@ pub fn show_arp(frame: frame::Frame) {
 /// Show TCP Packets as they come through the NIC.
 pub fn show_tcp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
-        if let ipv4::Payload::TCP(ref tcp_packet) = ip_packet.payload {
+        if let ip::Payload::TCP(ref tcp_packet) = ip_packet.payload {
             println!("{:#?}", tcp_packet);
         }
     }
@@ -65,7 +66,7 @@ pub fn show_tcp(frame: frame::Frame) {
 /// Show UDP Packets as they come through the NIC.
 pub fn show_udp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
-        if let ipv4::Payload::UDP(ref udp_packet) = ip_packet.payload {
+        if let ip::Payload::UDP(ref udp_packet) = ip_packet.payload {
             println!("{:#?}", udp_packet);
         }
     }
@@ -74,7 +75,7 @@ pub fn show_udp(frame: frame::Frame) {
 /// Show ICMP Packets as they come through the NIC.
 pub fn show_icmp(frame: frame::Frame) {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
-        if let ipv4::Payload::ICMP(ref icmp_packet) = ip_packet.payload {
+        if let ip::Payload::ICMP(ref icmp_packet) = ip_packet.payload {
             println!("{:#?}", icmp_packet);
         }
     }

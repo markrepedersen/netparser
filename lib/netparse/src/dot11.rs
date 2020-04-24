@@ -1,5 +1,5 @@
 use crate::frame::Addr;
-use crate::ipv4::Payload;
+use crate::ip::Payload;
 use crate::parse::{self, BitParsable};
 
 use custom_debug_derive::*;

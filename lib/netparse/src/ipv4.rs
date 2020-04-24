@@ -1,11 +1,11 @@
 use crate::{
     icmp,
+    ip::{Payload, Protocol},
     parse::{self, BitParsable},
     tcp, udp,
 };
 
 use custom_debug_derive::*;
-use derive_try_from_primitive::*;
 use nom::{
     bits::bits,
     bytes::complete::take,
@@ -16,28 +16,6 @@ use nom::{
 };
 use std::fmt;
 use ux::*;
-
-#[derive(Debug, TryFromPrimitive)]
-#[repr(u8)]
-pub enum Protocol {
-    ICMP = 1,
-    TCP = 6,
-    UDP = 17,
-}
-
-impl Protocol {
-    pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
-        context("IPv4 Protocol", map(be_u8, Self::try_from))(i)
-    }
-}
-
-#[derive(Debug)]
-pub enum Payload {
-    UDP(udp::Datagram),
-    TCP(tcp::Packet),
-    ICMP(icmp::Packet),
-    Unknown,
-}
 
 #[derive(CustomDebug)]
 pub struct Packet {

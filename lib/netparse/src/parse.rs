@@ -19,6 +19,12 @@ where
     fn parse(i: BitInput) -> BitResult<Self>;
 }
 
+impl BitParsable for u8 {
+    fn parse(i: BitInput) -> BitResult<Self> {
+        map(take_bits(8 as usize), Self::from_be)(i)
+    }
+}
+
 macro_rules! impl_bit_parsable_for_ux {
     ($($width: expr),*) => {
         $(

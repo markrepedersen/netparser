@@ -1,12 +1,22 @@
-use crate::parse;
+use crate::{
+    icmp,
+    ip::{Payload, Protocol},
+    parse,
+    parse::BitParsable,
+    tcp, udp,
+};
 
 use custom_debug_derive::*;
 use nom::{
+    bits::bits,
     bytes::complete::take,
+    combinator::map,
     error::context,
     number::complete::{be_u16, be_u8},
+    sequence::tuple,
 };
 use std::fmt;
+use ux::*;
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
 pub struct Addr(pub [u8; 16]);
@@ -45,31 +55,48 @@ impl Addr {
 
 #[derive(CustomDebug)]
 pub struct Packet {
+    #[debug(format = "{:02X}")]
+    pub version: u4,
+    #[debug(format = "{:02X}")]
+    pub traffic_class: u8,
+    #[debug(format = "{:02X}")]
+    pub flow_label: u20,
     #[debug(format = "{}")]
-    payload_len: u16,
+    pub payload_len: u16,
+    pub protocol: Option<Protocol>,
     #[debug(format = "{}")]
-    next_header: u8,
-    #[debug(format = "{}")]
-    ttl: u8,
-    src: Addr,
-    dst: Addr,
+    pub ttl: u8,
+    pub src: Addr,
+    pub dst: Addr,
+    pub payload: Payload,
 }
 
 impl Packet {
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
         context("IPv6 frame", |i| {
-            let (i, _) = take(4usize)(i)?;
+            let (i, (version, traffic_class, flow_label)) =
+                bits(tuple((u4::parse, u8::parse, u20::parse)))(i)?;
             let (i, payload_len) = be_u16(i)?;
-            let (i, next_header) = be_u8(i)?;
+            let (i, protocol) = Protocol::parse(i)?;
             let (i, ttl) = be_u8(i)?;
             let (i, src) = Addr::parse(i)?;
             let (i, dst) = Addr::parse(i)?;
+            let (i, payload) = match protocol {
+                Some(Protocol::TCP) => map(tcp::Packet::parse, Payload::TCP)(i)?,
+                Some(Protocol::UDP) => map(udp::Datagram::parse, Payload::UDP)(i)?,
+                Some(Protocol::ICMP) => map(icmp::Packet::parse, Payload::ICMP)(i)?,
+                _ => (i, Payload::Unknown),
+            };
             let res = Self {
+                version,
+                traffic_class,
+                flow_label,
                 payload_len,
-                next_header,
+                protocol,
                 ttl,
                 src,
                 dst,
+                payload,
             };
 
             Ok((i, res))
