@@ -2,5 +2,6 @@
 
 members = [
 "bin/netparser",
-"lib/netparse"
+"lib/netparse",
+"lib/emacs_netparser"
 ]

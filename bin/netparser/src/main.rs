@@ -25,6 +25,8 @@ pub struct CLI {
     ipv4: bool,
     #[clap(short = "6", long = "ipv6")]
     ipv6: bool,
+    #[clap(short = "H", long = "hex")]
+    hex_dump: bool,
 }
 
 fn main() {
@@ -37,7 +39,8 @@ fn main() {
         arp: cli.arp,
         ipv4: cli.ipv4,
         ipv6: cli.ipv6,
+        hex_dump: cli.hex_dump,
     };
-    
+
     run(opts);
 }

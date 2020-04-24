@@ -110,6 +110,15 @@ impl Packet {
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Addr(pub [u8; 4]);
 
+impl Addr {
+    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+        let (i, slice) = context("IPv4 address", take(4_usize))(i)?;
+        let mut res = Self([0, 0, 0, 0]);
+        res.0.copy_from_slice(slice);
+        Ok((i, res))
+    }
+}
+
 impl fmt::Display for Addr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let [a, b, c, d] = self.0;
@@ -120,14 +129,5 @@ impl fmt::Display for Addr {
 impl fmt::Debug for Addr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self)
-    }
-}
-
-impl Addr {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        let (i, slice) = context("IPv4 address", take(4_usize))(i)?;
-        let mut res = Self([0, 0, 0, 0]);
-        res.0.copy_from_slice(slice);
-        Ok((i, res))
     }
 }

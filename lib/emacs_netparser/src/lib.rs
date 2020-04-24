@@ -1,7 +1,18 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+use emacs::{defun, Env, Result, Value};
+use netparse::{run, PacketOptions};
+
+emacs::plugin_is_GPL_compatible!();
+
+#[emacs::module(name = "emacs_netparser", defun_prefix = "netparser", separator = "/")]
+fn init(_: &Env) -> Result<()> {
+    Ok(())
+}
+
+#[defun]
+fn run_netparser(env: &Env, interface: String) -> Result<Value<'_>> {
+    let opts = PacketOptions {
+        interface: String::from(interface),
+        ..Default::default()
+    };
+    run(opts)?;
 }
