@@ -13,6 +13,17 @@ pub struct CLI {
         required = true
     )]
     interface: String,
+    #[clap(
+        short = "f",
+        long = "filename",
+        value_name = "filename",
+        takes_value = true
+    )]
+    file_name: Option<String>,
+    #[clap(short = "H", long = "hex")]
+    hex_dump: bool,
+    #[clap(short = "j", long = "json")]
+    json: bool,
     #[clap(short = "U", long = "udp")]
     udp: bool,
     #[clap(short = "T", long = "tcp")]
@@ -25,22 +36,22 @@ pub struct CLI {
     ipv4: bool,
     #[clap(short = "6", long = "ipv6")]
     ipv6: bool,
-    #[clap(short = "H", long = "hex")]
-    hex_dump: bool,
 }
 
 fn main() {
     let cli: CLI = CLI::parse();
     let opts = PacketOptions {
         interface: cli.interface,
+        hex_dump: cli.hex_dump,
+        json: cli.json,
+        file_name: cli.file_name,
         udp: cli.udp,
         tcp: cli.tcp,
         icmp: cli.icmp,
         arp: cli.arp,
         ipv4: cli.ipv4,
         ipv6: cli.ipv6,
-        hex_dump: cli.hex_dump,
     };
 
-    run(opts);
+    run(&opts).expect("There was a problem parsing a packet(s)");
 }
