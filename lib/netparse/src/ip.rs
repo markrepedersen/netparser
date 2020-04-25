@@ -2,8 +2,9 @@ use crate::{icmp, parse, tcp, udp};
 
 use derive_try_from_primitive::*;
 use nom::{combinator::map, error::context, number::complete::be_u8};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Payload {
     UDP(udp::Datagram),
     TCP(tcp::Packet),
@@ -11,7 +12,7 @@ pub enum Payload {
     Unknown,
 }
 
-#[derive(Debug, TryFromPrimitive)]
+#[derive(Debug, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Protocol {
     ICMP = 1,

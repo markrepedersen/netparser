@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::{cmp::min, fmt};
 
+#[derive(Serialize, Deserialize)]
 pub struct Blob(pub Vec<u8>);
 
 impl fmt::Debug for Blob {

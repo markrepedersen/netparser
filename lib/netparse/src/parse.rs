@@ -1,3 +1,4 @@
+use crate::ux::*;
 use nom::{
     bits::complete::take as take_bits,
     combinator::map,
@@ -5,7 +6,6 @@ use nom::{
     ErrorConvert, Slice,
 };
 use std::{fmt, ops::RangeFrom};
-use ux::*;
 
 pub type Input<'a> = &'a [u8];
 pub type Result<'a, T> = nom::IResult<Input<'a>, T, Error<Input<'a>>>;

@@ -6,9 +6,10 @@ use nom::{
     bytes::complete::take, combinator::map, error::context, number::complete::be_u16,
     sequence::tuple,
 };
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, TryFromPrimitive, PartialEq, Eq)]
+#[derive(Debug, TryFromPrimitive, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u16)]
 pub enum EtherType {
     IPv4 = 0x0800,
@@ -22,7 +23,7 @@ impl EtherType {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct Addr(pub [u8; 6]);
 
 impl fmt::Display for Addr {
@@ -54,7 +55,7 @@ impl Addr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Payload {
     IPv4(ipv4::Packet),
     IPv6(ipv6::Packet),
@@ -62,7 +63,7 @@ pub enum Payload {
     Unknown,
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Frame {
     pub dst: Addr,
     pub src: Addr,

@@ -1,14 +1,17 @@
-use crate::frame::Addr;
-use crate::ip::Payload;
-use crate::parse::{self, BitParsable};
+use crate::{
+    frame::Addr,
+    ip::Payload,
+    parse::{self, BitParsable},
+    ux::*,
+};
 
 use custom_debug_derive::*;
 use nom::{
     bits::bits, bytes::complete::take, error::context, number::complete::be_u16, sequence::tuple,
 };
-use ux::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(CustomDebug)]
+#[derive(CustomDebug, Serialize, Deserialize)]
 pub struct FrameControl {
     #[debug(skip)]
     pub version: u2,

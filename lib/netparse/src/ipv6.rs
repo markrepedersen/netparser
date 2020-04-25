@@ -4,6 +4,7 @@ use crate::{
     parse,
     parse::BitParsable,
     tcp, udp,
+    ux::*,
 };
 
 use custom_debug_derive::*;
@@ -15,10 +16,10 @@ use nom::{
     number::complete::{be_u16, be_u8},
     sequence::tuple,
 };
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use ux::*;
 
-#[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Default)]
 pub struct Addr(pub [u8; 16]);
 
 impl fmt::Display for Addr {
@@ -53,7 +54,7 @@ impl Addr {
     }
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Packet {
     #[debug(format = "{:02X}")]
     pub version: u4,

@@ -8,8 +8,9 @@ use nom::{
     number::complete::{be_u16, be_u32, be_u8},
     sequence::tuple,
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Type {
     EchoReply,
     DestinationUnreachable(DestinationUnreachable),
@@ -18,19 +19,19 @@ pub enum Type {
     Other(u8, u8),
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum DestinationUnreachable {
     HostUnreachable,
     Other(u8),
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum TimeExceeded {
     TTLExpired,
     Other(u8),
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Echo {
     #[debug(format = "{:04x}")]
     pub identifier: u16,
@@ -51,7 +52,7 @@ impl Echo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Header {
     EchoRequest(Echo),
     EchoReply(Echo),
@@ -90,7 +91,7 @@ impl From<u8> for TimeExceeded {
     }
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Packet {
     pub typ: Type,
     #[debug(format = "{:02X}")]

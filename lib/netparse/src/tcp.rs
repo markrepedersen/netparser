@@ -1,6 +1,7 @@
 use crate::{
     blob::Blob,
     parse::{self, BitParsable},
+    ux::*,
 };
 
 use custom_debug_derive::*;
@@ -12,16 +13,16 @@ use nom::{
     number::complete::{be_u16, be_u32, be_u8},
     sequence::tuple,
 };
-use ux::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Options {
     Data(DataOptions),
     NoData(NoData),
     Empty,
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct DataOptions {
     #[debug(format = "{:02X}")]
     kind: u8,
@@ -46,7 +47,7 @@ impl DataOptions {
     }
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct NoData {
     #[debug(format = "{:02X}")]
     kind: u8,
@@ -62,7 +63,7 @@ impl NoData {
     }
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Packet {
     #[debug(format = "{}")]
     src_port: u16,

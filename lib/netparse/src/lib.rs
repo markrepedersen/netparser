@@ -8,30 +8,12 @@ pub mod ip;
 pub mod ipv4;
 pub mod ipv6;
 pub mod parse;
-pub mod serialize;
 pub mod tcp;
 pub mod udp;
+pub mod ux;
 
 use hex_slice::HexSlice;
 use pnet::datalink::{channel, interfaces, Channel};
-use std::{error::Error, fmt};
-
-type IResult<T> = std::result::Result<T, NetparseError>;
-
-#[derive(Debug, Clone)]
-struct NetparseError;
-
-impl fmt::Display for NetparseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Unable to parse given frame.")
-    }
-}
-
-impl Error for NetparseError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
-}
 
 /// Show IPv4 Packets as they come through the NIC.
 pub fn show_ipv4(frame: frame::Frame) {

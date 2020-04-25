@@ -8,8 +8,9 @@ use nom::{
     number::complete::{be_u16, be_u8},
     sequence::tuple,
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, TryFromPrimitive, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, TryFromPrimitive, Clone, Copy)]
 #[repr(u16)]
 pub enum Operation {
     ARPRequest = 1,
@@ -29,7 +30,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug, TryFromPrimitive, Clone, Copy)]
+#[derive(Debug, TryFromPrimitive, Clone, Copy, Serialize, Deserialize)]
 #[repr(u16)]
 #[allow(non_camel_case_types)]
 pub enum HardwareType {
@@ -52,7 +53,7 @@ impl HardwareType {
     }
 }
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Packet {
     pub htype: Option<HardwareType>,
     pub ptype: Option<frame::EtherType>,

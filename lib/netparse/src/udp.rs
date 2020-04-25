@@ -2,8 +2,9 @@ use crate::{blob::Blob, parse};
 
 use custom_debug_derive::*;
 use nom::{error::context, number::complete::be_u16, sequence::tuple};
+use serde::{Deserialize, Serialize};
 
-#[derive(CustomDebug)]
+#[derive(CustomDebug, Serialize, Deserialize)]
 pub struct Datagram {
     #[debug(format = "{}")]
     src_port: u16,

@@ -3,6 +3,7 @@ use crate::{
     ip::{Payload, Protocol},
     parse::{self, BitParsable},
     tcp, udp,
+    ux::*,
 };
 
 use custom_debug_derive::*;
@@ -14,16 +15,16 @@ use nom::{
     number::complete::{be_u16, be_u8},
     sequence::tuple,
 };
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use ux::*;
 
-#[derive(CustomDebug)]
+#[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Packet {
-    #[debug(format = "{:x}")]
+    #[debug(format = "{:02x}")]
     pub version: u4,
-    #[debug(format = "{:x}")]
+    #[debug(format = "{:02x}")]
     pub ihl: u4,
-    #[debug(format = "{:x}")]
+    #[debug(format = "{:02x}")]
     pub dscp: u6,
     #[debug(format = "{:b}")]
     pub ecn: u2,
@@ -84,8 +85,7 @@ impl Packet {
         })(i)
     }
 }
-
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 pub struct Addr(pub [u8; 4]);
 
 impl Addr {
