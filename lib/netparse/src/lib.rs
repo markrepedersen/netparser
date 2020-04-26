@@ -14,52 +14,60 @@ pub mod ux;
 
 use hex_slice::HexSlice;
 use pnet::datalink::{channel, interfaces, Channel};
+use serde::Serialize;
 use serde_json::to_writer;
 use std::{
     error::Error,
+    fmt::Debug,
     fs::{File, OpenOptions},
     io::{BufWriter, Write},
     os::unix::io::FromRawFd,
 };
 
+/// TODO: so much duplication...
+
 /// Show IPv4 Packets as they come through the NIC.
-pub fn show_ipv4(
-    writer: &mut BufWriter<File>,
+fn show_ipv4<W: Write>(
+    mut writer: &mut W,
     frame: &frame::Frame,
     opts: &PacketOptions,
-) -> Result<(), std::io::Error> {
+) -> Result<(), Box<dyn Error>> {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
-        writeln!(writer, "{:#?}", ip_packet)?;
+        write(&mut writer, &ip_packet, opts.json)?;
     }
     Ok(())
 }
 
 /// Show IPv6 Packets as they come through the NIC.
-pub fn show_ipv6(
-    writer: &mut BufWriter<File>,
+fn show_ipv6<W: Write>(
+    mut writer: &mut W,
     frame: &frame::Frame,
     opts: &PacketOptions,
-) -> Result<(), std::io::Error> {
+) -> Result<(), Box<dyn Error>> {
     if let frame::Payload::IPv6(ref ip_packet) = frame.payload {
-        writeln!(writer, "{:#?}", ip_packet)?;
+        write(&mut writer, &ip_packet, opts.json)?;
     }
     Ok(())
 }
 
 /// Show ARP Packets as they come through the NIC.
-pub fn show_arp(writer: &mut BufWriter<File>, frame: &frame::Frame) -> Result<(), std::io::Error> {
-    if let frame::Payload::ARP(ref ip_packet) = frame.payload {
-        writeln!(writer, "{:#?}", ip_packet)?;
+fn show_arp<W: Write>(
+    mut writer: &mut W,
+    frame: &frame::Frame,
+    opts: &PacketOptions,
+) -> Result<(), Box<dyn Error>> {
+    if let frame::Payload::ARP(ref packet) = frame.payload {
+        write(&mut writer, &packet, opts.json)?;
     }
     Ok(())
 }
 
 /// Show TCP Packets as they come through the NIC.
-pub fn show_tcp(
-    writer: &mut BufWriter<File>,
+fn show_tcp<W: Write>(
+    mut writer: &mut W,
     frame: &frame::Frame,
     opts: &PacketOptions,
-) -> Result<(), std::io::Error> {
+) -> Result<(), Box<dyn Error>> {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ip::Payload::TCP(ref tcp_packet) = ip_packet.payload {
             match tcp_packet {
@@ -67,10 +75,10 @@ pub fn show_tcp(
                     src_port, dst_port, ..
                 } if opts.port.is_some() => {
                     if *dst_port == opts.port.unwrap() || *src_port == opts.port.unwrap() {
-                        writeln!(writer, "{:#?}", tcp_packet)?;
+                        write(&mut writer, &tcp_packet, opts.json)?;
                     }
                 }
-                _ => writeln!(writer, "{:#?}", tcp_packet)?,
+                _ => write(&mut writer, &tcp_packet, opts.json)?,
             }
         }
     }
@@ -78,11 +86,11 @@ pub fn show_tcp(
 }
 
 /// Show UDP Packets as they come through the NIC.
-pub fn show_udp(
-    writer: &mut BufWriter<File>,
+fn show_udp<W: Write>(
+    mut writer: &mut W,
     frame: &frame::Frame,
     opts: &PacketOptions,
-) -> Result<(), std::io::Error> {
+) -> Result<(), Box<dyn Error>> {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ip::Payload::UDP(ref udp_packet) = ip_packet.payload {
             match udp_packet {
@@ -90,10 +98,10 @@ pub fn show_udp(
                     src_port, dst_port, ..
                 } if opts.port.is_some() => {
                     if *dst_port == opts.port.unwrap() || *src_port == opts.port.unwrap() {
-                        writeln!(writer, "{:#?}", udp_packet)?;
+                        write(&mut writer, &udp_packet, opts.json)?;
                     }
                 }
-                _ => writeln!(writer, "{:#?}", udp_packet)?,
+                _ => write(&mut writer, &udp_packet, opts.json)?,
             }
         }
     }
@@ -101,10 +109,14 @@ pub fn show_udp(
 }
 
 /// Show ICMP Packets as they come through the NIC.
-pub fn show_icmp(writer: &mut BufWriter<File>, frame: &frame::Frame) -> Result<(), std::io::Error> {
+fn show_icmp<W: Write>(
+    mut writer: &mut W,
+    frame: &frame::Frame,
+    opts: &PacketOptions,
+) -> Result<(), Box<dyn Error>> {
     if let frame::Payload::IPv4(ref ip_packet) = frame.payload {
         if let ip::Payload::ICMP(ref icmp_packet) = ip_packet.payload {
-            writeln!(writer, "{:#?}", icmp_packet)?;
+            write(&mut writer, &icmp_packet, opts.json)?;
         }
     }
     Ok(())
@@ -127,47 +139,56 @@ pub struct PacketOptions {
     pub ipv6: bool,
 }
 
+fn write<T: Debug + Serialize, W: Write>(
+    mut writer: &mut W,
+    frame: &T,
+    json: bool,
+) -> Result<(), Box<dyn Error>> {
+    if json {
+        to_writer(&mut writer, &frame)?;
+    } else {
+        writeln!(writer, "{:#?}", &frame)?;
+    }
+    Ok(())
+}
+
 /// Write packets to desired output.
-fn write_packet(
-    mut writer: &mut BufWriter<File>,
+fn write_packet<T: Write>(
+    mut writer: &mut T,
     packet: &[u8],
     opts: &PacketOptions,
 ) -> Result<(), Box<dyn Error>> {
     match frame::Frame::parse(packet) {
         Ok((_remaining, frame)) => {
-            if let PacketOptions { hex_dump: true, .. } = opts {
+            if opts.hex_dump {
                 writeln!(&mut writer, "{:X}", HexSlice::new(packet))?;
             }
 
-            if let PacketOptions { json: true, .. } = opts {
-                to_writer(&mut writer, &frame)?;
-            }
-
-            if let PacketOptions { all: true, .. } = opts {
-                writeln!(&mut writer, "{:#?}", &frame)?;
+            if opts.all {
+                write(&mut writer, &frame, opts.json)?;
             } else {
-                if let PacketOptions { ipv4: true, .. } = opts {
+                if opts.ipv4 {
                     show_ipv4(&mut writer, &frame, &opts)?;
                 }
 
-                if let PacketOptions { ipv6: true, .. } = opts {
+                if opts.ipv6 {
                     show_ipv6(&mut writer, &frame, &opts)?;
                 }
 
-                if let PacketOptions { arp: true, .. } = opts {
-                    show_arp(&mut writer, &frame)?;
+                if opts.arp {
+                    show_arp(&mut writer, &frame, &opts)?;
                 }
 
-                if let PacketOptions { tcp: true, .. } = opts {
+                if opts.tcp {
                     show_tcp(&mut writer, &frame, &opts)?;
                 }
 
-                if let PacketOptions { udp: true, .. } = opts {
+                if opts.udp {
                     show_udp(&mut writer, &frame, &opts)?;
                 }
 
-                if let PacketOptions { icmp: true, .. } = opts {
-                    show_icmp(&mut writer, &frame)?;
+                if opts.icmp {
+                    show_icmp(&mut writer, &frame, &opts)?;
                 }
             }
         }
