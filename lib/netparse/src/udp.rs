@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct Datagram {
     #[debug(format = "{}")]
-    src_port: u16,
+    pub src_port: u16,
     #[debug(format = "{}")]
-    dst_port: u16,
+    pub dst_port: u16,
     #[debug(format = "{}")]
-    len: u16,
+    pub len: u16,
     #[debug(format = "{:04x}")]
-    checksum: u16,
-    payload: Blob,
+    pub checksum: u16,
+    pub payload: Blob,
 }
 
 impl Datagram {

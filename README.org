@@ -13,16 +13,19 @@ For using as a library, see lib/netparse for available entry points.
 ** Running
 Options:
 
-| short | long        | desc                                   | required |
-|-------+-------------+----------------------------------------+----------|
-| -i    | --interface | Interface on which to monitor          | yes      |
-| -H,   | --hex       | Show raw packets in hexadecimal format | no       |
-| -A    | --arp       | Show ARP packets only                  | no       |
-| -I,   | --icmp      | Show ICMP packets only                 | no       |
-| -4,   | --ipv4      | Show IPv4 packets only                 | no       |
-| -6,   | --ipv6      | Show IPV6 packets only                 | no       |
-| -T,   | --tcp       | Show TCP packets only                  | no       |
-| -U,   | --udp       | Show UDP packets only                  | no       |
+| short | long        | desc                                                                                                                        | required |
+|-------+-------------+-----------------------------------------------------------------------------------------------------------------------------+----------|
+| -i    | --interface | Interface on which to monitor.                                                                                              | yes      |
+| -H,   | --hex       | Show raw packets in hexadecimal format.                                                                                     | no       |
+| -j,   | --json      | Write file as JSON. Can only be used if a file name is specified.                                                           | no       |
+| -f,   | --filename  | Write contents to the given file.                                                                                           | no       |
+| -p,   | --port      | Only show packets with the given port (src or dst). Note that this option only makes sense when viewing TCP or UDP packets. | no       |
+| -A    | --arp       | Show ARP packets.                                                                                                           | no       |
+| -I,   | --icmp      | Show ICMP packets.                                                                                                          | no       |
+| -4,   | --ipv4      | Show IPv4 packets.                                                                                                          | no       |
+| -6,   | --ipv6      | Show IPV6 packets.                                                                                                          | no       |
+| -T,   | --tcp       | Show TCP packets.                                                                                                           | no       |
+| -U,   | --udp       | Show UDP packets.                                                                                                           | no       |
 
 #+begin_src bash
 cargo run -p netparser -- <options>

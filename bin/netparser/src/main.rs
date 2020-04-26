@@ -20,10 +20,14 @@ pub struct CLI {
         takes_value = true
     )]
     file_name: Option<String>,
-    #[clap(short = "H", long = "hex")]
+    #[clap(short = "H", long = "hexdump")]
     hex_dump: bool,
     #[clap(short = "j", long = "json")]
     json: bool,
+    #[clap(short = "p", long = "port", takes_value = true)]
+    port: Option<u16>,
+    #[clap(short = "a", long = "all")]
+    all: bool,
     #[clap(short = "U", long = "udp")]
     udp: bool,
     #[clap(short = "T", long = "tcp")]
@@ -45,6 +49,8 @@ fn main() {
         hex_dump: cli.hex_dump,
         json: cli.json,
         file_name: cli.file_name,
+        port: cli.port,
+        all: cli.all,
         udp: cli.udp,
         tcp: cli.tcp,
         icmp: cli.icmp,

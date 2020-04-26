@@ -66,43 +66,43 @@ impl NoData {
 #[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Packet {
     #[debug(format = "{}")]
-    src_port: u16,
+    pub src_port: u16,
     #[debug(format = "{}")]
-    dst_port: u16,
+    pub dst_port: u16,
     #[debug(format = "{:04x}")]
-    seq_num: u32,
+    pub seq_num: u32,
     #[debug(format = "{:04x}")]
-    ack_num: u32,
+    pub ack_num: u32,
     #[debug(format = "{}")]
-    offset: u4,
+    pub offset: u4,
     #[debug(format = "{}")]
-    reserved: u3,
+    pub reserved: u3,
     #[debug(format = "{}")]
-    ns: u1,
+    pub ns: u1,
     #[debug(format = "{}")]
-    cwr: u1,
+    pub cwr: u1,
     #[debug(format = "{}")]
-    ece: u1,
+    pub ece: u1,
     #[debug(format = "{}")]
-    urg: u1,
+    pub urg: u1,
     #[debug(format = "{}")]
-    ack: u1,
+    pub ack: u1,
     #[debug(format = "{}")]
-    psh: u1,
+    pub psh: u1,
     #[debug(format = "{}")]
-    rst: u1,
+    pub rst: u1,
     #[debug(format = "{}")]
-    syn: u1,
+    pub syn: u1,
     #[debug(format = "{}")]
-    fin: u1,
+    pub fin: u1,
     #[debug(format = "{}")]
-    window_size: u16,
+    pub window_size: u16,
     #[debug(format = "{:04x}")]
-    checksum: u16,
+    pub checksum: u16,
     #[debug(format = "{:04x}")]
-    urgent_ptr: u16,
-    options: Options,
-    payload: Blob,
+    pub urgent_ptr: u16,
+    pub options: Options,
+    pub payload: Blob,
 }
 
 impl Packet {
