@@ -130,7 +130,6 @@ pub struct PacketOptions {
     pub file_name: Option<String>,
     pub hex_dump: bool,
     pub port: Option<u16>,
-    pub all: bool,
     pub udp: bool,
     pub tcp: bool,
     pub icmp: bool,
@@ -162,33 +161,41 @@ fn write_packet<T: Write>(
         Ok((_remaining, frame)) => {
             if opts.hex_dump {
                 writeln!(&mut writer, "{:X}", HexSlice::new(packet))?;
-            }
-
-            if opts.all {
-                write(&mut writer, &frame, opts.json)?;
             } else {
+                let mut verbose = true;
+
                 if opts.ipv4 {
+                    verbose = false;
                     show_ipv4(&mut writer, &frame, &opts)?;
                 }
 
                 if opts.ipv6 {
+                    verbose = false;
                     show_ipv6(&mut writer, &frame, &opts)?;
                 }
 
                 if opts.arp {
+                    verbose = false;
                     show_arp(&mut writer, &frame, &opts)?;
                 }
 
                 if opts.tcp {
+                    verbose = false;
                     show_tcp(&mut writer, &frame, &opts)?;
                 }
 
                 if opts.udp {
+                    verbose = false;
                     show_udp(&mut writer, &frame, &opts)?;
                 }
 
                 if opts.icmp {
+                    verbose = false;
                     show_icmp(&mut writer, &frame, &opts)?;
+                }
+
+                if verbose {
+                    write(&mut writer, &frame, opts.json)?;
                 }
             }
         }

@@ -9,10 +9,11 @@ fn init(_: &Env) -> Result<()> {
 }
 
 #[defun]
-fn run_netparser(env: &Env, interface: String) -> Result<Value<'_>> {
+fn run_netparser(env: &Env, interface: String) -> Result<()> {
     let opts = PacketOptions {
         interface: String::from(interface),
         ..Default::default()
     };
-    run(opts)?;
+    run(&opts).unwrap();
+    Ok(())
 }
