@@ -331,8 +331,12 @@ define_unsigned!(#[doc="The 12-bit unsigned integer type."], u12, 12, u16);
 define_unsigned!(#[doc="The 13-bit unsigned integer type."], u13, 13, u16);
 define_unsigned!(#[doc="The 14-bit unsigned integer type."], u14, 14, u16);
 define_unsigned!(#[doc="The 15-bit unsigned integer type."], u15, 15, u16);
-
 define_unsigned!(#[doc="The 17-bit unsigned integer type."], u17, 17, u32);
 define_unsigned!(#[doc="The 18-bit unsigned integer type."], u18, 18, u32);
 define_unsigned!(#[doc="The 19-bit unsigned integer type."], u19, 19, u32);
+
 define_unsigned!(#[doc="The 20-bit unsigned integer type."], u20, 20, u32);
+define_unsigned!(#[doc="The 21-bit unsigned integer type."], u21, 21, u32);
+define_unsigned!(#[doc="The 22-bit unsigned integer type."], u22, 22, u32);
+define_unsigned!(#[doc="The 23-bit unsigned integer type."], u23, 23, u32);
+define_unsigned!(#[doc="The 24-bit unsigned integer type."], u24, 24, u32);

@@ -28,6 +28,10 @@ pub struct CLI {
     #[clap(short = "j", long = "json")]
     /// Output as JSON. This will only work if a file name is also provided.
     json: bool,
+    /// On most OSes, 802.11 frames are converted into fake Ethernet frames, unless monitor mode is being used.
+    /// This option will use monitor mode so the raw, wireless frames are displayed instead.
+    #[clap(short = "W", long = "wireless")]
+    wireless: bool,
     #[clap(short = "p", long = "port", takes_value = true)]
     /// Filter by source or destination port. Only works when also filtering by TCP and UDP packets.
     port: Option<u16>,
@@ -58,6 +62,7 @@ fn main() {
         hex_dump: cli.hex_dump,
         json: cli.json,
         file_name: cli.file_name,
+        wireless: cli.wireless,
         port: cli.port,
         udp: cli.udp,
         tcp: cli.tcp,

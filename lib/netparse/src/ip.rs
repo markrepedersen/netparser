@@ -3,6 +3,7 @@ use crate::{icmp, parse, tcp, udp};
 use derive_try_from_primitive::*;
 use nom::{combinator::map, error::context, number::complete::be_u8};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Payload {
