@@ -39,7 +39,7 @@ macro_rules! impl_bit_parsable_for_ux {
     };
 }
 
-impl_bit_parsable_for_ux!(1, 2, 3, 4, 6, 13, 20, 24);
+impl_bit_parsable_for_ux!(1, 2, 3, 4, 6, 12, 13, 20, 24);
 
 impl<I> ErrorConvert<Error<I>> for Error<(I, usize)>
 where

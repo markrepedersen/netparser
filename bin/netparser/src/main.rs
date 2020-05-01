@@ -32,9 +32,9 @@ pub struct CLI {
     /// This option will use monitor mode so the raw, wireless frames are displayed instead.
     #[clap(short = "W", long = "wireless")]
     wireless: bool,
-    #[clap(short = "p", long = "port", takes_value = true)]
-    /// Filter by source or destination port. Only works when also filtering by TCP and UDP packets.
-    port: Option<u16>,
+    #[clap(long = "filter", takes_value = true)]
+    /// Filter by pcap filter. See https://biot.com/capstats/bpf.html for syntax.
+    filter: Option<String>,
     #[clap(short = "U", long = "udp")]
     /// Output only UDP packets.
     udp: bool,
@@ -63,7 +63,7 @@ fn main() {
         json: cli.json,
         file_name: cli.file_name,
         wireless: cli.wireless,
-        port: cli.port,
+        filter: cli.filter,
         udp: cli.udp,
         tcp: cli.tcp,
         icmp: cli.icmp,

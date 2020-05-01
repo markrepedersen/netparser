@@ -17,17 +17,47 @@ use nom::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(CustomDebug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Dot11Addr {
+    /// The destination is the station that will process the network-layer packet contained in the frame.
+    DestinationAddress(Addr),
+    /// The receiver is the station that will attempt to decode the radio waves into an 802.11 frame
+    ReceiverAddress(Addr),
+    /// The sender is the frame that generated the network-layer protocol packet in the frame.
+    SourceAddress(Addr),
+    /// Used to send acknowledgments.
+    /// Transmitters are not necessarily senders.
+    /// The transmitter puts the frame on to the radio link.
+    TransmitterAddress(Addr),
+    /// Only when set to a broadcast or multicast address.
+    /// Stations respond only to broadcasts and multicasts originating in the same basic service set (BSS); they ignore broadcasts and multicasts from different BSSIDs
+    BSSID(Addr),
+}
+
+#[derive(CustomDebug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum Type {
     Management = 0x0,
     Control,
     Data,
     Extension,
+    Unknown,
+}
+
+impl From<u2> for Type {
+    fn from(i: u2) -> Self {
+        match i {
+            i if i == u2::new(0x0) => Type::Management,
+            i if i == u2::new(0x1) => Type::Control,
+            i if i == u2::new(0x2) => Type::Data,
+            i if i == u2::new(0x3) => Type::Extension,
+            _ => Type::Unknown,
+        }
+    }
 }
 
 #[allow(non_camel_case_types)]
-#[derive(CustomDebug, Serialize, Deserialize)]
-pub enum SubType {
+#[derive(CustomDebug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum Subtype {
     AssociationRequest = 0x0,
     AssociationResponse,
     ReassociationRequest,
@@ -53,8 +83,8 @@ pub enum SubType {
     BAR,
     BA,
     PSPoll,
-    RTS,
-    CTS,
+    RequestToSend,
+    ClearToSend,
     ACK,
     CFEnd,
     CFEnd_And_CFAck,
@@ -76,18 +106,73 @@ pub enum SubType {
     QoS_CFAck_And_CFPoll,
     DMGBeacon,
     Reserved5,
+    Unknown,
 }
 
-#[derive(CustomDebug, Serialize, Deserialize)]
+impl Subtype {
+    fn from_type(typ: Type, i: u4) -> Self {
+        match i {
+            i if typ == Type::Management && i == u4::new(0x0) => Subtype::AssociationRequest,
+            i if typ == Type::Management && i == u4::new(0x1) => Subtype::AssociationResponse,
+            i if typ == Type::Management && i == u4::new(0x2) => Subtype::ReassociationRequest,
+            i if typ == Type::Management && i == u4::new(0x3) => Subtype::ReassociationResponse,
+            i if typ == Type::Management && i == u4::new(0x4) => Subtype::ProbeRequest,
+            i if typ == Type::Management && i == u4::new(0x5) => Subtype::ProbeResponse,
+            i if typ == Type::Management && i == u4::new(0x6) => Subtype::TimingAdvertisement,
+            i if typ == Type::Management && i == u4::new(0x7) => Subtype::Reserved1,
+            i if typ == Type::Management && i == u4::new(0x8) => Subtype::Beacon,
+            i if typ == Type::Management && i == u4::new(0x9) => Subtype::ATIM,
+            i if typ == Type::Management && i == u4::new(0xA) => Subtype::Disassociation,
+            i if typ == Type::Management && i == u4::new(0xB) => Subtype::Authentication,
+            i if typ == Type::Management && i == u4::new(0xC) => Subtype::Deauthentication,
+            i if typ == Type::Management && i == u4::new(0xD) => Subtype::Action,
+            i if typ == Type::Management && i == u4::new(0xE) => Subtype::NACK,
+            i if typ == Type::Management && i == u4::new(0xF) => Subtype::Reserved2,
+            i if typ == Type::Control && (i == u4::new(0x0) || i == u4::new(0x1)) => {
+                Subtype::Reserved3
+            }
+            i if typ == Type::Control && i == u4::new(0x2) => Subtype::Trigger,
+            i if typ == Type::Control && i == u4::new(0x4) => Subtype::BeamformingReportPoll,
+            i if typ == Type::Control && i == u4::new(0x5) => Subtype::VHT_OR_HE_NDP_Announcement,
+            i if typ == Type::Control && i == u4::new(0x6) => Subtype::ControlFrameExtension,
+            i if typ == Type::Control && i == u4::new(0x7) => Subtype::ControlWrapper,
+            i if typ == Type::Control && i == u4::new(0x8) => Subtype::BAR,
+            i if typ == Type::Control && i == u4::new(0x9) => Subtype::BA,
+            i if typ == Type::Control && i == u4::new(0xA) => Subtype::PSPoll,
+            i if typ == Type::Control && i == u4::new(0xB) => Subtype::RequestToSend,
+            i if typ == Type::Control && i == u4::new(0xC) => Subtype::ClearToSend,
+            i if typ == Type::Control && i == u4::new(0xD) => Subtype::ACK,
+            i if typ == Type::Control && i == u4::new(0xE) => Subtype::CFEnd,
+            i if typ == Type::Control && i == u4::new(0xF) => Subtype::CFEnd_And_CFAck,
+            i if typ == Type::Data && i == u4::new(0x0) => Subtype::Data,
+            i if typ == Type::Data && i == u4::new(0x1) => Subtype::Data_And_CFAck,
+            i if typ == Type::Data && i == u4::new(0x2) => Subtype::Data_And_CFPoll,
+            i if typ == Type::Data && i == u4::new(0x3) => Subtype::Data_And_CFAck_And_CFPoll,
+            i if typ == Type::Data && i == u4::new(0x4) => Subtype::Null,
+            i if typ == Type::Data && i == u4::new(0x5) => Subtype::CFAck_NoData,
+            i if typ == Type::Data && i == u4::new(0x6) => Subtype::CFPoll_NoData,
+            i if typ == Type::Data && i == u4::new(0x7) => Subtype::CFAck_And_CFPoll_NoData,
+            i if typ == Type::Data && i == u4::new(0x8) => Subtype::QoSData,
+            i if typ == Type::Data && i == u4::new(0x9) => Subtype::QoSData_And_CFAck,
+            i if typ == Type::Data && i == u4::new(0xA) => Subtype::QoSData_And_CFPoll,
+            i if typ == Type::Data && i == u4::new(0xB) => Subtype::QoSData_And_CFAck_And_CFPoll,
+            i if typ == Type::Data && i == u4::new(0xC) => Subtype::QoSNull,
+            i if typ == Type::Data && i == u4::new(0xD) => Subtype::Reserved4,
+            i if typ == Type::Data && i == u4::new(0xE) => Subtype::QoS_CFPoll,
+            i if typ == Type::Data && i == u4::new(0xF) => Subtype::QoS_CFAck_And_CFPoll,
+            i if typ == Type::Extension && i == u4::new(0x0) => Subtype::DMGBeacon,
+            i if typ == Type::Extension && i != u4::new(0x0) => Subtype::Reserved5,
+            _ => Subtype::Unknown,
+        }
+    }
+}
+
+#[derive(CustomDebug, Serialize, Deserialize, Clone)]
 pub struct FrameControl {
     #[debug(format = "{}")]
     pub version: u2,
-
-    #[debug(format = "{}")]
-    pub typ: u2,
-
-    #[debug(format = "{}")]
-    pub subtype: u4,
+    pub typ: Type,
+    pub subtype: Subtype,
 
     #[debug(format = "{}")]
     pub to_ds: u1,
@@ -118,6 +203,10 @@ impl FrameControl {
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
         context("802.11 Frame Control", |i| {
             let (i, (version, typ, subtype)) = bits(tuple((u2::parse, u2::parse, u4::parse)))(i)?;
+
+            let typ = Type::from(typ);
+            let subtype = Subtype::from_type(typ.clone(), subtype);
+
             let (i, (to_ds, from_ds, more_fragments, retry, power_mgmt, more_data, wep, order)) =
                 bits(tuple((
                     u1::parse,
@@ -129,6 +218,7 @@ impl FrameControl {
                     u1::parse,
                     u1::parse,
                 )))(i)?;
+
             let res = Self {
                 version,
                 typ,
@@ -142,6 +232,7 @@ impl FrameControl {
                 wep,
                 order,
             };
+
             return Ok((i, res));
         })(i)
     }
@@ -223,20 +314,91 @@ impl SNAPHeader {
 }
 
 #[derive(CustomDebug, Serialize, Deserialize)]
-/// The MAC Frame header. LLC/SNAP Headers are encapsulated in the upper level
-/// data, however, this data is encrypted and will show garbage information.
+pub struct SeqControl {
+    #[debug(format = "{}")]
+    pub frag_num: u4,
+    #[debug(format = "{}")]
+    pub seq_num: u12,
+}
+
+impl SeqControl {
+    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+        context("802.11 Sequence Control", |i| {
+            let (i, (frag_num, seq_num)) = bits(tuple((u4::parse, u12::parse)))(i)?;
+
+            let res = Self { frag_num, seq_num };
+            Ok((i, res))
+        })(i)
+    }
+}
+
+#[derive(CustomDebug, Serialize, Deserialize)]
+/// The MAC Frame header.
+/// - LLC/SNAP Headers are encapsulated in the upper level.
+/// - Note that LLC/SNAP header and data are WEP or WPA/WPA2 encrypted, so these bytes will not be representative of the actual data.
 pub struct Frame {
     pub fc: FrameControl,
     pub duration: u16,
-    pub addr1: Addr,
-    pub addr2: Addr,
-    pub addr3: Addr,
-    pub addr4: Addr,
-    pub seq_control: u16,
+    pub addr1: Dot11Addr,
+    pub addr2: Option<Dot11Addr>,
+    pub addr3: Option<Dot11Addr>,
+    pub seq_control: Option<SeqControl>,
+    pub addr4: Option<Dot11Addr>,
     pub llc: Option<LLCHeader>,
     pub snap: Option<SNAPHeader>,
     pub payload: Option<Payload>,
     pub crc: u16,
+}
+
+impl Frame {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+    fn parse_addr(i: parse::Input, fc: FrameControl) -> parse::Result<(Dot11Addr, Option<Dot11Addr>, Option<Dot11Addr>, Option<SeqControl>, Option<Dot11Addr>)> {
+	use Dot11Addr::*;
+        let res = match fc.typ {
+            Type::Data => {
+		let (i, (addr1, addr2, addr3, seq_control)) = tuple((Addr::parse, Addr::parse, Addr::parse, SeqControl::parse))(i)?;
+		match fc {
+                    FrameControl { to_ds: x, from_ds: y, .. } if x == u1::new(0) && y == u1::new(0) => {
+			(i, (DestinationAddress(addr1), Some(SourceAddress(addr2)), Some(BSSID(addr3)), Some(seq_control), None))
+                    }
+                    FrameControl { to_ds: x, from_ds: y, .. } if x == u1::new(1) && y == u1::new(0) => {
+			(i, (BSSID(addr1), Some(SourceAddress(addr2)), Some(DestinationAddress(addr3)), Some(seq_control), None))
+                    }
+                    FrameControl { to_ds: x, from_ds: y, .. } if x == u1::new(0) && y == u1::new(1) => {
+			(i, (DestinationAddress(addr1), Some(BSSID(addr2)), Some(SourceAddress(addr3)), Some(seq_control), None))
+                    }
+                    _ => {
+			let (i, addr4) = Addr::parse(i)?;
+			(i, (ReceiverAddress(addr1), Some(TransmitterAddress(addr2)), Some(DestinationAddress(addr3)), Some(seq_control), Some(SourceAddress(addr4))))
+                    }
+		}
+	    },
+            Type::Control => match fc.subtype {
+                Subtype::RequestToSend => {
+                    let (i, (addr1, addr2)) = tuple((Addr::parse, Addr::parse))(i)?;
+                    (i, (ReceiverAddress(addr1), Some(TransmitterAddress(addr2)), None, None, None))
+                }
+		Subtype::PSPoll => {
+                    let (i, (addr1, addr2)) = tuple((Addr::parse, Addr::parse))(i)?;
+                    (i, (BSSID(addr1), Some(TransmitterAddress(addr2)), None, None, None))
+                }
+                _ => {
+                    let (i, addr1) = Addr::parse(i)?;
+                    (i, (ReceiverAddress(addr1), None, None, None, None))
+                }
+            },
+            Type::Management => {
+		let (i, (addr1, addr2, addr3, seq_control)) = tuple((Addr::parse, Addr::parse, Addr::parse, SeqControl::parse))(i)?;
+                (i, (DestinationAddress(addr1), Some(SourceAddress(addr2)), Some(BSSID(addr3)), Some(seq_control), None))
+	    },
+            _ => {
+                let (i, addr1) = Addr::parse(i)?;
+                (i, (ReceiverAddress(addr1), None, None, None, None))
+            }
+        };
+
+	Ok(res)
+    }
 }
 
 impl DatalinkFrame for Frame {
@@ -246,39 +408,22 @@ impl DatalinkFrame for Frame {
 
     fn parse(i: parse::Input) -> parse::Result<Self> {
         context("802.11 MAC frame", |i| {
-            let (i, fc, has_data) = {
-                let (i, fc) = FrameControl::parse(i)?;
-                let has_data = fc.typ == u2::new(2);
-                (i, fc, has_data)
-            };
+            let (i, fc) = FrameControl::parse(i)?;
             let (i, duration) = be_u16(i)?;
-            let (i, (addr1, addr2, addr3, addr4)) =
-                tuple((Addr::parse, Addr::parse, Addr::parse, Addr::parse))(i)?;
-            let (i, seq_control) = be_u16(i)?;
-            let (i, llc) = if has_data {
-                let (i, header) = LLCHeader::parse(i)?;
-                (i, Some(header))
-            } else {
-                (i, None)
-            };
-
-            let (i, mut snap) = if has_data {
-                let (i, header) = SNAPHeader::parse(i)?;
-                (i, Some(header))
-            } else {
-                (i, None)
-            };
-
-            let (i, payload) = if has_data && snap.is_some() {
-                let (i, payload) = match snap.as_mut().unwrap().ether_type {
-                    Some(EtherType::IPv4) => map(ipv4::Packet::parse, Payload::IPv4)(i)?,
-                    Some(EtherType::IPv6) => map(ipv6::Packet::parse, Payload::IPv6)(i)?,
-                    Some(EtherType::ARP) => map(arp::Packet::parse, Payload::ARP)(i)?,
-                    _ => (i, Payload::Unknown),
-                };
-                (i, Some(payload))
-            } else {
-                (i, None)
+            let (i, (addr1, addr2, addr3, seq_control, addr4)) = Frame::parse_addr(i, fc.clone())?;
+            let (i, (llc, snap, payload)) = match fc.typ {
+                Type::Data => {
+                    let (i, llc) = LLCHeader::parse(i)?;
+                    let (i, snap) = SNAPHeader::parse(i)?;
+                    let (i, payload) = match snap.ether_type {
+                        Some(EtherType::IPv4) => map(ipv4::Packet::parse, Payload::IPv4)(i)?,
+                        Some(EtherType::IPv6) => map(ipv6::Packet::parse, Payload::IPv6)(i)?,
+                        Some(EtherType::ARP) => map(arp::Packet::parse, Payload::ARP)(i)?,
+                        _ => (i, Payload::Unknown),
+                    };
+                    (i, (Some(llc), Some(snap), Some(payload)))
+                }
+                _ => (i, (None, None, None)),
             };
 
             let (i, crc) = be_u16(i)?;

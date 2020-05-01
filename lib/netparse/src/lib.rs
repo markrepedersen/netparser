@@ -34,7 +34,7 @@ pub struct PacketOptions {
     pub file_name: Option<String>,
     pub hex_dump: bool,
     pub wireless: bool,
-    pub port: Option<u16>,
+    pub filter: Option<String>,
     pub udp: bool,
     pub tcp: bool,
     pub icmp: bool,
@@ -91,31 +91,13 @@ fn write_packet<T: Write, D: DatalinkFrame>(
         match payload {
             Some(datalink::Payload::IPv4(ref ip_packet)) => {
                 if let ip::Payload::TCP(ref udp_packet) = ip_packet.payload {
-                    match udp_packet {
-                        tcp::Packet {
-                            src_port, dst_port, ..
-                        } if opts.port.is_some() => {
-                            if *dst_port == opts.port.unwrap() || *src_port == opts.port.unwrap() {
-                                write(&mut writer, &udp_packet, opts.json)?;
-                            }
-                        }
-                        _ => write(&mut writer, &udp_packet, opts.json)?,
-                    }
+                    write(&mut writer, &udp_packet, opts.json)?;
                 }
             }
 
             Some(datalink::Payload::IPv6(ref ip_packet)) => {
                 if let ip::Payload::TCP(ref udp_packet) = ip_packet.payload {
-                    match udp_packet {
-                        tcp::Packet {
-                            src_port, dst_port, ..
-                        } if opts.port.is_some() => {
-                            if *dst_port == opts.port.unwrap() || *src_port == opts.port.unwrap() {
-                                write(&mut writer, &udp_packet, opts.json)?;
-                            }
-                        }
-                        _ => write(&mut writer, &udp_packet, opts.json)?,
-                    }
+                    write(&mut writer, &udp_packet, opts.json)?;
                 }
             }
             _ => {}
@@ -127,31 +109,13 @@ fn write_packet<T: Write, D: DatalinkFrame>(
         match payload {
             Some(datalink::Payload::IPv4(ref ip_packet)) => {
                 if let ip::Payload::UDP(ref udp_packet) = ip_packet.payload {
-                    match udp_packet {
-                        udp::Datagram {
-                            src_port, dst_port, ..
-                        } if opts.port.is_some() => {
-                            if *dst_port == opts.port.unwrap() || *src_port == opts.port.unwrap() {
-                                write(&mut writer, &udp_packet, opts.json)?;
-                            }
-                        }
-                        _ => write(&mut writer, &udp_packet, opts.json)?,
-                    }
+                    write(&mut writer, &udp_packet, opts.json)?;
                 }
             }
 
             Some(datalink::Payload::IPv6(ref ip_packet)) => {
                 if let ip::Payload::UDP(ref udp_packet) = ip_packet.payload {
-                    match udp_packet {
-                        udp::Datagram {
-                            src_port, dst_port, ..
-                        } if opts.port.is_some() => {
-                            if *dst_port == opts.port.unwrap() || *src_port == opts.port.unwrap() {
-                                write(&mut writer, &udp_packet, opts.json)?;
-                            }
-                        }
-                        _ => write(&mut writer, &udp_packet, opts.json)?,
-                    }
+                    write(&mut writer, &udp_packet, opts.json)?;
                 }
             }
             _ => {}
@@ -203,23 +167,41 @@ fn create_writer(opts: &PacketOptions) -> BufWriter<File> {
     };
 }
 
+fn parse_dot11<W: Write>(
+    i: parse::Input,
+    mut w: &mut W,
+    opts: &PacketOptions,
+) -> Result<(), Box<dyn Error>> {
+    match dot11::Frame::parse(i) {
+        Ok((_remaining, frame)) => write_packet(&mut w, &frame, opts)?,
+        _ => {}
+    };
+    Ok(())
+}
+
 /// Capture packets, blocking until any are found.
 pub fn run(opts: &PacketOptions) -> Result<(), Box<dyn Error>> {
     let mut cap = Capture::from_device(opts.interface.as_str())
         .unwrap()
         .promisc(true)
         .rfmon(opts.wireless)
-        .buffer_size(10000)
+        .buffer_size(512)
         .open()
         .unwrap();
     let link_type = cap.get_datalink();
-    let mut writer = create_writer(&opts);
+    let mut writer = create_writer(opts);
+
+    if opts.filter.is_some() {
+        cap.filter(opts.filter.clone().unwrap().as_str())
+            .expect("Invalid filter provided");
+    }
 
     loop {
         match cap.next() {
             Ok(packet) => {
                 if opts.hex_dump {
                     writeln!(&mut writer, "{:X}", HexSlice::new(packet.data))?;
+                    writeln!(&mut writer)?;
                 }
 
                 match link_type {
@@ -228,21 +210,20 @@ pub fn run(opts: &PacketOptions) -> Result<(), Box<dyn Error>> {
                             write_packet(&mut writer, &frame, opts)?
                         };
                     }
-                    Linktype(105) | Linktype(119) | Linktype(127) | Linktype(163) => {
+                    Linktype(105) => parse_dot11(packet.data, &mut writer, opts)?,
+                    Linktype(127) => {
                         if let Ok((remaining, _)) = dot11::RadioTapHeader::parse(packet.data) {
-                            match dot11::Frame::parse(remaining) {
-                                Ok((_remaining, frame)) => write_packet(&mut writer, &frame, opts)?,
-                                _ => {}
-                            }
+                            parse_dot11(remaining, &mut writer, opts)?
                         }
                     }
-                    _ => panic!("Unsupported interface: {:?}", link_type),
+                    _ => unimplemented!("Unsupported interface: {:?}", link_type),
                 }
+
+                writer.flush()?;
             }
             Err(e) => {
                 panic!("An error occurred while reading packet: {}", e);
             }
         }
-        writer.flush()?;
     }
 }
