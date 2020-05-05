@@ -747,9 +747,12 @@ impl SSID {
         context("802.11 Management Frame SSID", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, ssid) = take(common.len)(i)?;
-            let ssid = std::str::from_utf8(ssid)
+            let mut ssid = std::str::from_utf8(ssid)
                 .unwrap_or("Invalid/Malformed SSID")
                 .to_string();
+            if ssid == "" {
+                ssid = "Universal Broadcast SSID".to_string();
+            }
             let res = Self { common, ssid };
 
             Ok((i, res))
