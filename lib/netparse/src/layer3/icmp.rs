@@ -1,4 +1,4 @@
-use crate::blob::Blob;
+use crate::core::blob::Blob;
 use crate::parse;
 
 use custom_debug_derive::*;

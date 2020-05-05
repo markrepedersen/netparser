@@ -1,4 +1,4 @@
-use crate::{datalink::*, ipv4, parse};
+use crate::{core::parse, layer2::datalink::*, layer3::ip::ipv4};
 
 use custom_debug_derive::*;
 use derive_try_from_primitive::*;

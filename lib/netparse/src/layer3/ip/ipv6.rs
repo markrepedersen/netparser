@@ -1,10 +1,12 @@
 use crate::{
-    icmp,
-    ip::{Payload, Protocol},
-    parse,
-    parse::BitParsable,
-    tcp, udp,
-    ux::*,
+    core::{
+        parse::{self, BitParsable},
+        ux::*,
+    },
+    layer3::{
+        icmp,
+        ip::{ip::*, tcp, udp},
+    },
 };
 
 use custom_debug_derive::*;

@@ -1,4 +1,4 @@
-use crate::{icmp, parse, tcp, udp};
+use crate::{core::parse, layer3::icmp, layer3::ip::tcp, layer3::ip::udp};
 
 use derive_try_from_primitive::*;
 use nom::{combinator::map, error::context, number::complete::be_u8};

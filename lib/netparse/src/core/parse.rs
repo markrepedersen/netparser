@@ -1,4 +1,5 @@
-use crate::ux::*;
+use crate::core::ux::*;
+
 use nom::{
     bits::complete::take as take_bits,
     combinator::map,
@@ -21,7 +22,7 @@ where
 
 impl BitParsable for u8 {
     fn parse(i: BitInput) -> BitResult<Self> {
-        map(take_bits(8 as usize), Self::from_be)(i)
+        map(take_bits(8usize), Self::from_be)(i)
     }
 }
 
@@ -39,7 +40,7 @@ macro_rules! impl_bit_parsable_for_ux {
     };
 }
 
-impl_bit_parsable_for_ux!(1, 2, 3, 4, 6, 12, 13, 20, 24);
+impl_bit_parsable_for_ux!(1, 2, 3, 4, 6, 7, 12, 13, 20, 24, 48);
 
 impl<I> ErrorConvert<Error<I>> for Error<(I, usize)>
 where

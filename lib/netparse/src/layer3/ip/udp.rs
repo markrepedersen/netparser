@@ -1,4 +1,4 @@
-use crate::{blob::Blob, parse};
+use crate::core::{blob::Blob, parse};
 
 use custom_debug_derive::*;
 use nom::{error::context, number::complete::be_u16, sequence::tuple};

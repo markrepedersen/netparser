@@ -1,4 +1,8 @@
-use crate::{arp, datalink, datalink::*, ipv4, ipv6, parse};
+use crate::{
+    core::parse,
+    layer2::{arp, datalink},
+    layer3::ip::{ipv4, ipv6},
+};
 
 use custom_debug_derive::*;
 use nom::{combinator::map, error::context, sequence::tuple};
@@ -6,22 +10,28 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, CustomDebug)]
 pub struct Frame {
-    pub dst: Addr,
-    pub src: Addr,
-    pub ether_type: Option<EtherType>,
+    pub dst: datalink::Addr,
+    pub src: datalink::Addr,
+    pub ether_type: Option<datalink::EtherType>,
     pub payload: Option<datalink::Payload>,
 }
 
-impl DatalinkFrame for Frame {
-    fn parse(i: parse::Input) -> parse::Result<Self> {
+impl Frame {
+    pub fn parse(i: parse::Input) -> parse::Result<Self> {
         context("Ethernet frame", |i| {
-            let (i, (dst, src)) = tuple((Addr::parse, Addr::parse))(i)?;
-            let (i, ether_type) = EtherType::parse(i)?;
+            let (i, (dst, src)) = tuple((datalink::Addr::parse, datalink::Addr::parse))(i)?;
+            let (i, ether_type) = datalink::EtherType::parse(i)?;
             let (i, payload) = match ether_type {
-                Some(EtherType::IPv4) => map(ipv4::Packet::parse, Payload::IPv4)(i)?,
-                Some(EtherType::IPv6) => map(ipv6::Packet::parse, Payload::IPv6)(i)?,
-                Some(EtherType::ARP) => map(arp::Packet::parse, Payload::ARP)(i)?,
-                None => (i, Payload::Unknown),
+                Some(datalink::EtherType::IPv4) => {
+                    map(ipv4::Packet::parse, datalink::Payload::IPv4)(i)?
+                }
+                Some(datalink::EtherType::IPv6) => {
+                    map(ipv6::Packet::parse, datalink::Payload::IPv6)(i)?
+                }
+                Some(datalink::EtherType::ARP) => {
+                    map(arp::Packet::parse, datalink::Payload::ARP)(i)?
+                }
+                None => (i, datalink::Payload::Unknown),
             };
 
             let res = Self {
@@ -32,10 +42,6 @@ impl DatalinkFrame for Frame {
             };
             Ok((i, res))
         })(i)
-    }
-
-    fn get_payload(&self) -> &Option<Payload> {
-        &self.payload
     }
 }
 
@@ -54,12 +60,12 @@ mod tests {
     #[test]
     fn assert_valid_frame() {
         let frame = Frame::parse(TEST_FRAME).unwrap().1;
-        let dst_addr = Addr::new(&TEST_FRAME[..6]);
-        let src_addr = Addr::new(&TEST_FRAME[6..12]);
+        let dst_addr = datalink::Addr::new(&TEST_FRAME[..6]);
+        let src_addr = datalink::Addr::new(&TEST_FRAME[6..12]);
 
         assert_eq!(frame.dst, dst_addr);
         assert_eq!(frame.src, src_addr);
-        assert_eq!(frame.ether_type.unwrap(), EtherType::IPv4);
+        assert_eq!(frame.ether_type.unwrap(), datalink::EtherType::IPv4);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::{arp, ipv4, ipv6, parse};
+use crate::{core::parse, layer2::arp, layer3::ip::ipv4, layer3::ip::ipv6};
 
 use derive_try_from_primitive::*;
 use nom::{bytes::complete::take, combinator::map, error::context, number::complete::be_u16};
@@ -37,18 +37,11 @@ impl Addr {
     }
 }
 
-pub trait DatalinkFrame: Sized + Serialize + Debug {
-    fn get_payload(&self) -> &Option<Payload>;
-
-    fn parse(i: parse::Input) -> parse::Result<Self>;
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Payload {
     IPv4(ipv4::Packet),
     IPv6(ipv6::Packet),
     ARP(arp::Packet),
-    Protected,
     Unknown,
 }
 

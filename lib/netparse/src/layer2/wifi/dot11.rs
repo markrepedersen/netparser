@@ -1,18 +1,16 @@
 use crate::{
-    arp,
-    datalink::*,
-    ipv4, ipv6,
-    parse::{self, BitParsable},
-    ux::*,
+    core::{
+        parse::{self, BitParsable},
+        ux::*,
+    },
+    layer2::{datalink::*, wifi::data::*, wifi::management::*},
 };
 
 use custom_debug_derive::*;
 use nom::{
     bits::bits,
-    bytes::complete::take,
-    combinator::map,
     error::context,
-    number::complete::{be_u16, be_u8, le_u16, le_u32, le_u8},
+    number::complete::{le_u16, le_u32},
     sequence::tuple,
 };
 use serde::{Deserialize, Serialize};
@@ -40,7 +38,6 @@ pub enum Type {
     Control,
     Data,
     Extension,
-    Unknown,
 }
 
 impl From<u2> for Type {
@@ -49,8 +46,7 @@ impl From<u2> for Type {
             i if i == u2::new(0x0) => Type::Management,
             i if i == u2::new(0x1) => Type::Control,
             i if i == u2::new(0x2) => Type::Data,
-            i if i == u2::new(0x3) => Type::Extension,
-            _ => Type::Unknown,
+            _ => Type::Extension,
         }
     }
 }
@@ -200,13 +196,12 @@ pub struct FrameControl {
 }
 
 impl FrameControl {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
         context("802.11 Frame Control", |i| {
-            let (i, (version, typ, subtype)) = bits(tuple((u2::parse, u2::parse, u4::parse)))(i)?;
-
+            let (i, (subtype, typ, version)) = bits(tuple((u4::parse, u2::parse, u2::parse)))(i)?;
             let typ = Type::from(typ);
             let subtype = Subtype::from_type(typ.clone(), subtype);
-
             let (i, (to_ds, from_ds, more_fragments, retry, power_mgmt, more_data, wep, order)) =
                 bits(tuple((
                     u1::parse,
@@ -239,81 +234,6 @@ impl FrameControl {
 }
 
 #[derive(CustomDebug, Serialize, Deserialize)]
-pub struct RadioTapHeader {
-    #[debug(format = "{:02X}")]
-    pub it_version: u8,
-    #[debug(format = "{}")]
-    pub it_pad: u8,
-    #[debug(format = "{}")]
-    pub it_len: u16,
-    #[debug(format = "{:08X}")]
-    pub it_present: u32,
-}
-
-impl RadioTapHeader {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        context("802.11 Radiotap Header", |i| {
-            let original_i = i;
-            let (i, it_version) = le_u8(i)?;
-            let (i, it_pad) = le_u8(i)?;
-            let (i, it_len) = le_u16(i)?;
-            let (_, it_present) = le_u32(i)?;
-            let (i, _) = take(it_len)(original_i)?;
-
-            let res = Self {
-                it_version,
-                it_pad,
-                it_len,
-                it_present,
-            };
-
-            Ok((i, res))
-        })(i)
-    }
-}
-
-#[derive(CustomDebug, Serialize, Deserialize)]
-pub struct LLCHeader {
-    #[debug(format = "{:02X}")]
-    pub dsap: u8,
-    #[debug(format = "{:02X}")]
-    pub ssap: u8,
-    #[debug(format = "{:02X}")]
-    pub ctrl: u8,
-}
-
-impl LLCHeader {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        context("802.11 LLC Header", |i| {
-            let (i, dsap) = be_u8(i)?;
-            let (i, ssap) = be_u8(i)?;
-            let (i, ctrl) = be_u8(i)?;
-
-            let res = Self { dsap, ssap, ctrl };
-
-            Ok((i, res))
-        })(i)
-    }
-}
-
-#[derive(CustomDebug, Serialize, Deserialize)]
-pub struct SNAPHeader {
-    pub ether_type: Option<EtherType>,
-}
-
-impl SNAPHeader {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        context("802.11 SNAP Header", |i| {
-            let (i, _) = take(3_usize)(i)?;
-            let (i, ether_type) = EtherType::parse(i)?;
-
-            let res = Self { ether_type };
-            Ok((i, res))
-        })(i)
-    }
-}
-
-#[derive(CustomDebug, Serialize, Deserialize)]
 pub struct SeqControl {
     #[debug(format = "{}")]
     pub frag_num: u4,
@@ -325,10 +245,92 @@ impl SeqControl {
     pub fn parse(i: parse::Input) -> parse::Result<Self> {
         context("802.11 Sequence Control", |i| {
             let (i, (frag_num, seq_num)) = bits(tuple((u4::parse, u12::parse)))(i)?;
-
             let res = Self { frag_num, seq_num };
             Ok((i, res))
         })(i)
+    }
+}
+
+#[derive(CustomDebug, Serialize, Deserialize)]
+pub enum FrameBody {
+    Data(DataFrameBody),
+    Beacon(BeaconFrameBody),
+    ProbeRequest(ProbeRequestFrameBody),
+    ProbeResponse(ProbeResponseFrameBody),
+    Deauthentication(DeauthenticationFrameBody),
+    Disassociation(ReasonCode),
+    Authentication(AuthenticationFrameBody),
+    AssociationRequest(AssociationRequestFrameBody),
+    ReassociationRequest(ReassociationRequestFrameBody),
+    AssociationResponse(AssociationResponseFrameBody),
+    ReassociationResponse(AssociationResponseFrameBody),
+    Empty,
+}
+
+impl FrameBody {
+    fn parse<'a>(fc: &FrameControl, i: parse::Input<'a>) -> parse::Result<'a, Self> {
+        Ok(match fc.typ {
+            Type::Data => match fc.subtype {
+                Subtype::Data
+                | Subtype::Data_And_CFAck
+                | Subtype::Data_And_CFPoll
+                | Subtype::Data_And_CFAck_And_CFPoll
+                | Subtype::QoSData
+                | Subtype::QoSData_And_CFAck
+                | Subtype::QoSData_And_CFPoll
+                | Subtype::QoSData_And_CFAck_And_CFPoll => {
+                    let (i, body) = DataFrameBody::parse(i)?;
+                    (i, FrameBody::Data(body))
+                }
+                _ => (i, FrameBody::Empty),
+            },
+
+            Type::Management => match fc.subtype {
+                Subtype::Beacon => {
+                    let (i, body) = BeaconFrameBody::parse(i)?;
+                    (i, FrameBody::Beacon(body))
+                }
+
+                Subtype::ProbeRequest => {
+                    let (i, body) = ProbeRequestFrameBody::parse(i)?;
+                    (i, FrameBody::ProbeRequest(body))
+                }
+
+                Subtype::ProbeResponse => {
+                    let (i, body) = ProbeResponseFrameBody::parse(i)?;
+                    (i, FrameBody::ProbeResponse(body))
+                }
+
+                Subtype::Deauthentication | Subtype::Disassociation => {
+                    let (i, body) = DeauthenticationFrameBody::parse(i)?;
+                    (i, FrameBody::Deauthentication(body))
+                }
+
+                Subtype::Authentication => {
+                    let (i, body) = AuthenticationFrameBody::parse(i)?;
+                    (i, FrameBody::Authentication(body))
+                }
+
+                Subtype::AssociationRequest => {
+                    let (i, body) = AssociationRequestFrameBody::parse(i)?;
+                    (i, FrameBody::AssociationRequest(body))
+                }
+
+                Subtype::ReassociationRequest => {
+                    let (i, body) = ReassociationRequestFrameBody::parse(i)?;
+                    (i, FrameBody::ReassociationRequest(body))
+                }
+
+                Subtype::AssociationResponse | Subtype::ReassociationResponse => {
+                    let (i, body) = AssociationResponseFrameBody::parse(i)?;
+                    (i, FrameBody::AssociationResponse(body))
+                }
+
+                _ => (i, FrameBody::Empty),
+            },
+
+            _ => (i, FrameBody::Empty),
+        })
     }
 }
 
@@ -338,16 +340,16 @@ impl SeqControl {
 /// - Note that LLC/SNAP header and data are WEP or WPA/WPA2 encrypted, so these bytes will not be representative of the actual data.
 pub struct Frame {
     pub fc: FrameControl,
+    #[debug(format = "{}")]
     pub duration: u16,
     pub addr1: Dot11Addr,
     pub addr2: Option<Dot11Addr>,
     pub addr3: Option<Dot11Addr>,
     pub seq_control: Option<SeqControl>,
     pub addr4: Option<Dot11Addr>,
-    pub llc: Option<LLCHeader>,
-    pub snap: Option<SNAPHeader>,
-    pub payload: Option<Payload>,
-    pub crc: u16,
+    pub frame_body: FrameBody,
+    #[debug(format = "0x{:04X}")]
+    pub fcs: u32,
 }
 
 impl Frame {
@@ -401,32 +403,14 @@ impl Frame {
     }
 }
 
-impl DatalinkFrame for Frame {
-    fn get_payload(&self) -> &Option<Payload> {
-        &self.payload
-    }
-
-    fn parse(i: parse::Input) -> parse::Result<Self> {
+impl Frame {
+    pub fn parse(i: parse::Input) -> parse::Result<Self> {
         context("802.11 MAC frame", |i| {
             let (i, fc) = FrameControl::parse(i)?;
-            let (i, duration) = be_u16(i)?;
+            let (i, duration) = le_u16(i)?;
             let (i, (addr1, addr2, addr3, seq_control, addr4)) = Frame::parse_addr(i, fc.clone())?;
-            let (i, (llc, snap, payload)) = match fc.typ {
-                Type::Data => {
-                    let (i, llc) = LLCHeader::parse(i)?;
-                    let (i, snap) = SNAPHeader::parse(i)?;
-                    let (i, payload) = match snap.ether_type {
-                        Some(EtherType::IPv4) => map(ipv4::Packet::parse, Payload::IPv4)(i)?,
-                        Some(EtherType::IPv6) => map(ipv6::Packet::parse, Payload::IPv6)(i)?,
-                        Some(EtherType::ARP) => map(arp::Packet::parse, Payload::ARP)(i)?,
-                        _ => (i, Payload::Unknown),
-                    };
-                    (i, (Some(llc), Some(snap), Some(payload)))
-                }
-                _ => (i, (None, None, None)),
-            };
-
-            let (i, crc) = be_u16(i)?;
+            let (i, frame_body) = FrameBody::parse(&fc, i)?;
+            let (i, fcs) = le_u32(i)?;
 
             let res = Self {
                 fc,
@@ -436,10 +420,8 @@ impl DatalinkFrame for Frame {
                 addr3,
                 addr4,
                 seq_control,
-                llc,
-                snap,
-                payload,
-                crc,
+                frame_body,
+                fcs,
             };
             Ok((i, res))
         })(i)

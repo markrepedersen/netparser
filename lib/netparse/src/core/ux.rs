@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 /// This is taken from https://github.com/kjetilkjeka/uX. All credits go to the author of it.
 /// This is being copied because for some reason it doesn't implement Serializable/Deserialiable. Until that's fixed I'll just keep this here.
+use serde::{Deserialize, Serialize};
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt::{Binary, Display, Formatter, LowerHex, Octal, UpperHex};
 use std::hash::{Hash, Hasher};
@@ -340,3 +340,6 @@ define_unsigned!(#[doc="The 21-bit unsigned integer type."], u21, 21, u32);
 define_unsigned!(#[doc="The 22-bit unsigned integer type."], u22, 22, u32);
 define_unsigned!(#[doc="The 23-bit unsigned integer type."], u23, 23, u32);
 define_unsigned!(#[doc="The 24-bit unsigned integer type."], u24, 24, u32);
+
+define_unsigned!(#[doc="The 48-bit unsigned integer type."], u48, 48, u64);
+define_unsigned!(#[doc="The 56-bit unsigned integer type."], u56, 56, u64);
