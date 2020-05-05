@@ -672,7 +672,7 @@ impl Country {
             let common = CommonFieldsElement { id, len };
             let (i, country_string) = take(3usize)(i)?;
             let country_string = std::str::from_utf8(country_string)
-                .expect("Invalid country string: Failed to convert binary to UTF-8 string.")
+                .unwrap_or("Invalid/Malformed country code")
                 .to_string();
             let (i, constraints) = Self::parse_triplets(i, common.len - 3)?;
             let res = Self {
