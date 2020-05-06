@@ -32,7 +32,7 @@ impl Addr {
         res
     }
 
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("MAC address", map(take(6_usize), Self::new))(i)
     }
 }
@@ -54,7 +54,7 @@ pub enum EtherType {
 }
 
 impl EtherType {
-    pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Option<Self>> {
         context("EtherType", map(be_u16, Self::try_from))(i)
     }
 }

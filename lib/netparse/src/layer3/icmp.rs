@@ -40,7 +40,7 @@ pub struct Echo {
 }
 
 impl Echo {
-    fn parse(i: parse::Input) -> parse::Result<Self> {
+    fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("Echo", |i| {
             map(tuple((be_u16, be_u16)), |(identifier, sequence_number)| {
                 Echo {
@@ -102,7 +102,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("ICMP frame", |i| {
             let (i, typ) = {
                 let (i, (typ, code)) = tuple((be_u8, be_u8))(i)?;

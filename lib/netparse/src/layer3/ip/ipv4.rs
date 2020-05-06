@@ -50,7 +50,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("IPv4 frame", |i| {
             let (i, (version, ihl)) = bits(tuple((u4::parse, u4::parse)))(i)?;
             let (i, (dscp, ecn)) = bits(tuple((u6::parse, u2::parse)))(i)?;
@@ -92,7 +92,7 @@ impl Packet {
 pub struct Addr(pub [u8; 4]);
 
 impl Addr {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         let (i, slice) = context("IPv4 address", take(4_usize))(i)?;
         let mut res = Self([0, 0, 0, 0]);
         res.0.copy_from_slice(slice);

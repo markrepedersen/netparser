@@ -22,7 +22,7 @@ pub enum Protocol {
 }
 
 impl Protocol {
-    pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Option<Self>> {
         context("IPv4 Protocol", map(be_u8, Self::try_from))(i)
     }
 }

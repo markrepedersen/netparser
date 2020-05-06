@@ -9,7 +9,7 @@ use nom::{
 use std::{fmt, ops::RangeFrom};
 
 pub type Input<'a> = &'a [u8];
-pub type Result<'a, T> = nom::IResult<Input<'a>, T, Error<Input<'a>>>;
+pub type ParseResult<'a, T> = nom::IResult<Input<'a>, T, Error<Input<'a>>>;
 pub type BitInput<'a> = (&'a [u8], usize);
 pub type BitResult<'a, T> = nom::IResult<BitInput<'a>, T, Error<BitInput<'a>>>;
 
@@ -60,10 +60,26 @@ where
 pub enum ErrorKind {
     Nom(NomErrorKind),
     Context(&'static str),
+    Custom(String),
+    Malformed,
 }
 
 pub struct Error<I> {
     pub errors: Vec<(I, ErrorKind)>,
+}
+
+impl<I> Error<I> {
+    pub fn malformed(input: I) -> Self {
+        Self {
+            errors: vec![(input, ErrorKind::Malformed)],
+        }
+    }
+
+    pub fn custom(input: I, msg: String) -> Self {
+        Self {
+            errors: vec![(input, ErrorKind::Custom(msg))],
+        }
+    }
 }
 
 impl<'a> fmt::Debug for Error<&'a [u8]> {
@@ -116,6 +132,8 @@ impl<'a> fmt::Debug for Error<&'a [u8]> {
             let prefix = match kind {
                 ErrorKind::Context(ctx) => format!("...in {}", ctx),
                 ErrorKind::Nom(err) => format!("nom error {:?}", err),
+                ErrorKind::Custom(err) => format!("err: {}", err),
+                ErrorKind::Malformed => format!("Malformed packet"),
             };
 
             write!(f, "{}\n", prefix)?;

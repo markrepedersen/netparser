@@ -1,37 +1,40 @@
 use crate::{
-    core::parse,
-    layer2::arp,
+    core::{blob::Blob, parse},
     layer2::datalink::*,
-    layer3::ip::{ipv4, ipv6},
 };
 
+use super::dot11::SEQ_CONTROL_SIZE;
 use custom_debug_derive::*;
-use nom::{bytes::complete::take, combinator::map, error::context, number::complete::be_u8};
+use nom::{bytes::complete::take, error::context, number::complete::be_u8};
 use serde::{Deserialize, Serialize};
 
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct DataFrameBody {
-    pub llc: Option<LLCHeader>,
-    pub snap: Option<SNAPHeader>,
-    pub payload: Option<Payload>,
+    // pub llc: Option<LLCHeader>,
+    // pub snap: Option<SNAPHeader>,
+    pub payload: Blob,
 }
 
 impl DataFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
-        context("802.11 Data Frame: Data frame body", |i| {
-            let (i, llc) = LLCHeader::parse(i)?;
-            let (i, snap) = SNAPHeader::parse(i)?;
-            let (i, payload) = match snap.ether_type {
-                Some(EtherType::IPv4) => map(ipv4::Packet::parse, Payload::IPv4)(i)?,
-                Some(EtherType::IPv6) => map(ipv6::Packet::parse, Payload::IPv6)(i)?,
-                Some(EtherType::ARP) => map(arp::Packet::parse, Payload::ARP)(i)?,
-                _ => (i, Payload::Unknown),
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
+        context("802.11 Data Frame: Data frame body", |i: parse::Input| {
+            // let (i, llc) = LLCHeader::parse(i)?;
+            // let (i, snap) = SNAPHeader::parse(i)?;
+            // let (i, payload) = match snap.ether_type {
+            //     Some(EtherType::IPv4) => map(ipv4::Packet::parse, Payload::IPv4)(i)?,
+            //     Some(EtherType::IPv6) => map(ipv6::Packet::parse, Payload::IPv6)(i)?,
+            //     Some(EtherType::ARP) => map(arp::Packet::parse, Payload::ARP)(i)?,
+            //     _ => (i, Payload::Unknown),
+            // };
+            let len = i.len().checked_sub(SEQ_CONTROL_SIZE - 1);
+            let payload = match len {
+                Some(len) => Blob::new(&i[..len]),
+                None => Blob::new(i),
             };
-
             let res = Self {
-                llc: Some(llc),
-                snap: Some(snap),
-                payload: Some(payload),
+                // llc: Some(llc),
+                // snap: Some(snap),
+                payload,
             };
 
             Ok((i, res))
@@ -50,7 +53,7 @@ pub struct LLCHeader {
 }
 
 impl LLCHeader {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("802.11 LLC Header", |i| {
             let (i, dsap) = be_u8(i)?;
             let (i, ssap) = be_u8(i)?;
@@ -69,7 +72,7 @@ pub struct SNAPHeader {
 }
 
 impl SNAPHeader {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("802.11 SNAP Header", |i| {
             let (i, _) = take(3_usize)(i)?;
             let (i, ether_type) = EtherType::parse(i)?;

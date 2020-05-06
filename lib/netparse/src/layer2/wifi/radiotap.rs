@@ -21,7 +21,7 @@ pub struct RadioTapHeader {
 }
 
 impl RadioTapHeader {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("802.11 Radiotap Header", |i| {
             let original_i = i;
             let (i, it_version) = le_u8(i)?;

@@ -25,7 +25,7 @@ pub enum Operation {
 }
 
 impl Operation {
-    pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Option<Self>> {
         context("Operation", map(be_u16, Self::try_from))(i)
     }
 }
@@ -46,7 +46,7 @@ pub enum HardwareType {
 }
 
 impl HardwareType {
-    pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Option<Self>> {
         context("HardwareType", map(be_u16, Self::try_from))(i)
     }
 }
@@ -67,7 +67,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("ARP Frame", |i| {
             let (i, (htype, ptype, hlen, plen)) =
                 tuple((HardwareType::parse, EtherType::parse, be_u8, be_u8))(i)?;

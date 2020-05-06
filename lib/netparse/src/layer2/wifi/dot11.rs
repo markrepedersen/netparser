@@ -1,5 +1,6 @@
 use crate::{
     core::{
+        blob::Blob,
         parse::{self, BitParsable},
         ux::*,
     },
@@ -9,11 +10,14 @@ use crate::{
 use custom_debug_derive::*;
 use nom::{
     bits::bits,
+    bytes::complete::take,
     error::context,
     number::complete::{le_u16, le_u32},
     sequence::tuple,
 };
 use serde::{Deserialize, Serialize};
+
+pub static SEQ_CONTROL_SIZE: usize = 4;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Dot11Addr {
@@ -189,7 +193,7 @@ pub struct FrameControl {
     pub more_data: u1,
 
     #[debug(format = "{}")]
-    pub wep: u1,
+    pub protected: u1,
 
     #[debug(format = "{}")]
     pub order: u1,
@@ -197,12 +201,12 @@ pub struct FrameControl {
 
 impl FrameControl {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("802.11 Frame Control", |i| {
             let (i, (subtype, typ, version)) = bits(tuple((u4::parse, u2::parse, u2::parse)))(i)?;
             let typ = Type::from(typ);
             let subtype = Subtype::from_type(typ.clone(), subtype);
-            let (i, (to_ds, from_ds, more_fragments, retry, power_mgmt, more_data, wep, order)) =
+	    let (i, (order, protected, more_data, power_mgmt, retry, more_fragments, from_ds, to_ds)) =
                 bits(tuple((
                     u1::parse,
                     u1::parse,
@@ -224,7 +228,7 @@ impl FrameControl {
                 retry,
                 power_mgmt,
                 more_data,
-                wep,
+                protected,
                 order,
             };
 
@@ -242,7 +246,7 @@ pub struct SeqControl {
 }
 
 impl SeqControl {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("802.11 Sequence Control", |i| {
             let (i, (frag_num, seq_num)) = bits(tuple((u4::parse, u12::parse)))(i)?;
             let res = Self { frag_num, seq_num };
@@ -264,11 +268,22 @@ pub enum FrameBody {
     ReassociationRequest(ReassociationRequestFrameBody),
     AssociationResponse(AssociationResponseFrameBody),
     ReassociationResponse(AssociationResponseFrameBody),
+    Encrypted(Blob),
     Empty,
+    Malformed,
 }
 
 impl FrameBody {
-    fn parse<'a>(fc: &FrameControl, i: parse::Input<'a>) -> parse::Result<'a, Self> {
+    fn parse<'a>(fc: &FrameControl, i: parse::Input<'a>) -> parse::ParseResult<'a, Self> {
+        if fc.protected == u1::new(1) {
+            if let Some(len) = i.len().checked_sub(SEQ_CONTROL_SIZE) {
+                let (i, _) = take(len)(i)?;
+                let blob = Blob::new(i);
+                return Ok((i, FrameBody::Encrypted(blob)));
+            } else {
+                return Ok((i, FrameBody::Empty));
+            }
+        }
         Ok(match fc.typ {
             Type::Data => match fc.subtype {
                 Subtype::Data
@@ -354,7 +369,7 @@ pub struct Frame {
 
 impl Frame {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn parse_addr(i: parse::Input, fc: FrameControl) -> parse::Result<(Dot11Addr, Option<Dot11Addr>, Option<Dot11Addr>, Option<SeqControl>, Option<Dot11Addr>)> {
+    fn parse_addr(i: parse::Input, fc: FrameControl) -> parse::ParseResult<(Dot11Addr, Option<Dot11Addr>, Option<Dot11Addr>, Option<SeqControl>, Option<Dot11Addr>)> {
 	use Dot11Addr::*;
         let res = match fc.typ {
             Type::Data => {
@@ -404,14 +419,13 @@ impl Frame {
 }
 
 impl Frame {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("802.11 MAC frame", |i| {
             let (i, fc) = FrameControl::parse(i)?;
             let (i, duration) = le_u16(i)?;
             let (i, (addr1, addr2, addr3, seq_control, addr4)) = Frame::parse_addr(i, fc.clone())?;
             let (i, frame_body) = FrameBody::parse(&fc, i)?;
             let (i, fcs) = le_u32(i)?;
-
             let res = Self {
                 fc,
                 duration,

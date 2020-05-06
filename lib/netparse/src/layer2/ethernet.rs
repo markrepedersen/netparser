@@ -17,7 +17,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("Ethernet frame", |i| {
             let (i, (dst, src)) = tuple((datalink::Addr::parse, datalink::Addr::parse))(i)?;
             let (i, ether_type) = datalink::EtherType::parse(i)?;

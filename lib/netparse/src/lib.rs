@@ -87,7 +87,7 @@ fn write_packet<T: Write>(
 ) -> Result<(), Box<dyn Error>> {
     if opts.wireless {
         if let Ok((_, frame)) = dot11::Frame::parse(i) {
-            write(&mut writer, &frame, opts.json)?;
+            write(&mut writer, &frame, opts.json)?
         }
     } else {
         if let Ok((_, frame)) = ethernet::Frame::parse(i) {
@@ -211,13 +211,15 @@ pub fn run(opts: &PacketOptions) -> Result<(), Box<dyn Error>> {
             .expect("Invalid filter provided");
     }
 
+    println!("Capturing packets from interface '{}'.", opts.interface);
+
     loop {
         match cap.next() {
             Ok(packet) => {
-                if opts.hex_dump {
-                    writeln!(&mut writer, "{:X}", HexSlice::new(packet.data))?;
-                    writeln!(&mut writer)?;
-                }
+                // if opts.hex_dump {
+                writeln!(&mut writer, "{:X}", HexSlice::new(packet.data))?;
+                writeln!(&mut writer)?;
+                // }
 
                 match link_type {
                     Linktype(1) | Linktype(105) => write_packet(packet.data, &mut writer, opts)?,

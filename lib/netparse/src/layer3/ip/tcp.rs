@@ -32,7 +32,7 @@ pub struct DataOptions {
 }
 
 impl DataOptions {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("TCP Options", |i| {
             let (i, kind) = be_u8(i)?;
             let (i, len) = be_u8(i)?;
@@ -54,7 +54,7 @@ pub struct NoData {
 }
 
 impl NoData {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("TCP Options", |i| {
             let (i, kind) = be_u8(i)?;
             let res = Self { kind };
@@ -106,7 +106,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    fn get_options(i: parse::Input, offset: u4) -> parse::Result<Options> {
+    fn get_options(i: parse::Input, offset: u4) -> parse::ParseResult<Options> {
         if offset > u4::new(5) {
             if i[0] == 0x00 || i[0] == 0x01 {
                 map(NoData::parse, Options::NoData)(i)
@@ -118,7 +118,7 @@ impl Packet {
         }
     }
 
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("TCP Frame", |i| {
             let (i, (src_port, dst_port, seq_num, ack_num)) =
                 tuple((be_u16, be_u16, be_u32, be_u32))(i)?;

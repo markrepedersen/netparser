@@ -1,9 +1,6 @@
-use crate::{
-    core::parse::{self, BitParsable},
-    core::ux::*,
-    layer2::datalink::*,
-};
+use crate::{core::parse::*, core::ux::*, layer2::datalink::*};
 
+use super::dot11::SEQ_CONTROL_SIZE;
 use custom_debug_derive::*;
 use derive_try_from_primitive::*;
 use nom::{
@@ -14,12 +11,11 @@ use nom::{
     multi::many0,
     number::complete::{le_u16, le_u64, le_u8},
     sequence::tuple,
+    Offset,
 };
 use serde::{Deserialize, Serialize};
 use std::string::ToString;
 use strum_macros::Display;
-
-static SEQ_CONTROL_SIZE: usize = 4;
 
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct CapabilityInfo {
@@ -64,7 +60,7 @@ pub struct CapabilityInfo {
 
 impl CapabilityInfo {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame CapabilityInfo", |i| {
             let (i, (ess, ibss, cf_pollable, cf_poll_request, privacy, short_preamble, pbcc, channel_agility)) = bits(tuple((
                 u1::parse,
@@ -173,7 +169,7 @@ pub enum ReasonCode {
 }
 
 impl ReasonCode {
-    pub fn parse(i: parse::Input) -> parse::Result<String> {
+    pub fn parse(i: Input) -> ParseResult<String> {
         context("Reason Code", |i| {
             let (i, s) = map(le_u16, Self::try_from)(i)?;
             match s {
@@ -264,7 +260,7 @@ pub enum StatusCode {
 }
 
 impl StatusCode {
-    pub fn parse(i: parse::Input) -> parse::Result<String> {
+    pub fn parse(i: Input) -> ParseResult<String> {
         context("Status Code", |i| {
             let (i, s) = map(le_u16, Self::try_from)(i)?;
             match s {
@@ -311,13 +307,20 @@ pub enum Element {
 }
 
 impl Element {
-    fn parse_optional_fields(i: parse::Input) -> parse::Result<Vec<Element>> {
-        let (i, new_i) = take(i.len() - SEQ_CONTROL_SIZE)(i)?;
-        let (_, res) = many0(Self::parse)(new_i)?;
-        Ok((i, res))
+    fn parse_optional_fields(i: Input) -> ParseResult<Vec<Element>> {
+        let original_i = i;
+        let len = i.len().checked_sub(SEQ_CONTROL_SIZE);
+        if let Some(len) = len {
+            let (i, new_i) = take(len)(i)?;
+            let (_, res) = many0(Self::parse)(new_i)?;
+            Ok((i, res))
+        } else {
+            let err_slice = &original_i[..original_i.offset(i)];
+            Err(nom::Err::Error(Error::malformed(err_slice)))
+        }
     }
 
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context(
             "802.11 Management Frame: Variable Sized Management Info Element",
             |i| {
@@ -425,7 +428,7 @@ pub struct UnknownElement {
 }
 
 impl UnknownElement {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Body Unknown Element", |i| {
             let (i, _) = take(len)(i)?;
             let res = Self { id, len };
@@ -435,7 +438,7 @@ impl UnknownElement {
     }
 }
 
-#[derive(CustomDebug, Serialize, Deserialize)]
+#[derive(CustomDebug, Serialize, Deserialize, Default)]
 pub struct CommonFieldsElement {
     #[debug(format = "{}")]
     pub id: u8,
@@ -453,7 +456,7 @@ pub enum AuthenticationAlgorithm {
 }
 
 impl AuthenticationAlgorithm {
-    pub fn parse(i: parse::Input) -> parse::Result<Option<Self>> {
+    pub fn parse(i: Input) -> ParseResult<Option<Self>> {
         context(
             "802.11 Management Frame: auth algo",
             map(le_u16, Self::try_from),
@@ -472,7 +475,7 @@ pub struct SupportedRate {
 }
 
 impl SupportedRate {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame Supported Rate", |i| {
             let (i, (label, is_mandatory)) = bits(tuple((u7::parse, u1::parse)))(i)?;
             let res = Self {
@@ -497,13 +500,13 @@ pub struct SupportedRates {
 
 impl SupportedRates {
     /// Parses the variable amount of supported rates following the header.
-    fn parse_rates(i: parse::Input, len: u8) -> parse::Result<Vec<SupportedRate>> {
+    fn parse_rates(i: Input, len: u8) -> ParseResult<Vec<SupportedRate>> {
         let (i, new_i) = take(len)(i)?;
         let (_, res) = many0(SupportedRate::parse)(new_i)?;
         Ok((i, res))
     }
 
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Supported Rates", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, supported_rates) = Self::parse_rates(i, common.len)?;
@@ -537,7 +540,7 @@ pub struct FHParamSet {
 }
 
 impl FHParamSet {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame FH Parameter Set", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, dwell_time) = le_u16(i)?;
@@ -570,7 +573,7 @@ pub struct DSParamSet {
 }
 
 impl DSParamSet {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame DS Parameter Set", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, current_channel) = le_u8(i)?;
@@ -596,7 +599,7 @@ pub struct IBSSParamSet {
 }
 
 impl IBSSParamSet {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame IBSS Parameter Set", |i| {
             let common = CommonFieldsElement { id, len };
 
@@ -626,7 +629,7 @@ pub struct CountryConstraintTriplet {
 }
 
 impl CountryConstraintTriplet {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame Country Constaint Triplet", |i| {
             let (i, first_channel_num) = le_u8(i)?;
             let (i, num_channels) = le_u8(i)?;
@@ -661,27 +664,35 @@ pub struct Country {
 
 impl Country {
     /// Parses the variable amount of 3 tuple constraints that follow the country code.
-    fn parse_triplets(i: parse::Input, len: u8) -> parse::Result<Vec<CountryConstraintTriplet>> {
+    fn parse_triplets(i: Input, len: u8) -> ParseResult<Vec<CountryConstraintTriplet>> {
         let (i, new_i) = take(len)(i)?;
         let (_, res) = many0(CountryConstraintTriplet::parse)(new_i)?;
         Ok((i, res))
     }
 
-    fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Country Field", |i| {
             let common = CommonFieldsElement { id, len };
+            let original_i = i;
             let (i, country_string) = take(3usize)(i)?;
             let country_string = std::str::from_utf8(country_string)
-                .unwrap_or("Invalid/Malformed country code")
+                .unwrap_or("Unknown")
                 .to_string();
-            let (i, constraints) = Self::parse_triplets(i, common.len - 3)?;
-            let res = Self {
-                common,
-                country_string,
-                constraints,
-            };
+            let triplet_len = common.len.checked_sub(3);
 
-            Ok((i, res))
+            if let Some(len) = triplet_len {
+                let (i, constraints) = Self::parse_triplets(i, len)?;
+                let res = Self {
+                    common,
+                    country_string,
+                    constraints,
+                };
+
+                Ok((i, res))
+            } else {
+                let err_slice = &original_i[..original_i.offset(i)];
+                Err(nom::Err::Error(Error::malformed(err_slice)))
+            }
         })(i)
     }
 }
@@ -691,7 +702,7 @@ impl Country {
 /// A practical reason for this arrangement is that much more power is required to power up a transmitter than to simply turn on a receiver.
 /// The designers of 802.11 envisioned battery-powered mobile stations; the decision to have buffered frames delivered
 /// to stations periodically was a way to extend battery life for low-power devices.
-#[derive(CustomDebug, Serialize, Deserialize)]
+#[derive(CustomDebug, Serialize, Deserialize, Default)]
 pub struct TrafficIndicationMap {
     #[debug(skip)]
     pub common: CommonFieldsElement,
@@ -706,31 +717,39 @@ pub struct TrafficIndicationMap {
     /// The Bitmap Control field is divided into two subfields.
     /// Bit 0 is used for the traffic indication status of Association ID 0, which is reserved for multicast traffic.
     /// The remaining seven bits of the Bitmap Control field are used for the Bitmap Offset field.
-    #[debug(format = "{:02X}")]
+    #[debug(format = "0x{:02X}")]
     pub bitmap_control: u8,
     pub partial_virtual_bitmap: Vec<u8>,
 }
 
 impl TrafficIndicationMap {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Traffic Indication Map", |i| {
             let common = CommonFieldsElement { id, len };
+            let original_i = i;
 
             let (i, dtim_count) = le_u8(i)?;
             let (i, dtim_period) = le_u8(i)?;
             let (i, bitmap_control) = le_u8(i)?;
-            let (i, partial_virtual_bitmap) = take(common.len - 3)(i)?;
-            let partial_virtual_bitmap = Vec::from(partial_virtual_bitmap);
 
-            let res = Self {
-                common,
-                dtim_count,
-                dtim_period,
-                bitmap_control,
-                partial_virtual_bitmap,
-            };
+            let bitmap_len = common.len.checked_sub(3);
 
-            Ok((i, res))
+            if let Some(len) = bitmap_len {
+                let (i, partial_virtual_bitmap) = take(len)(i)?;
+                let partial_virtual_bitmap = Vec::from(partial_virtual_bitmap);
+                let res = Self {
+                    common,
+                    dtim_count,
+                    dtim_period,
+                    bitmap_control,
+                    partial_virtual_bitmap,
+                };
+
+                Ok((i, res))
+            } else {
+                let err_slice = &original_i[..original_i.offset(i)];
+                Err(nom::Err::Error(Error::malformed(err_slice)))
+            }
         })(i)
     }
 }
@@ -743,15 +762,15 @@ pub struct SSID {
 }
 
 impl SSID {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame SSID", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, ssid) = take(common.len)(i)?;
             let mut ssid = std::str::from_utf8(ssid)
                 .unwrap_or("Invalid/Malformed SSID")
                 .to_string();
-            if ssid == "" {
-                ssid = "Universal Broadcast SSID".to_string();
+            if ssid.is_empty() {
+                ssid = "Wildcard SSID".to_string();
             }
             let res = Self { common, ssid };
 
@@ -768,7 +787,7 @@ pub struct RequestElement {
 }
 
 impl RequestElement {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Requested Elements", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, new_i) = take(common.len)(i)?;
@@ -791,12 +810,12 @@ pub struct ChallengeText {
 }
 
 impl ChallengeText {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Challenge Text", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, challenge_text) = take(common.len)(i)?;
             let challenge_text = std::str::from_utf8(challenge_text)
-                .expect("Invalid conversion of challenge text.")
+                .unwrap_or("Unknown")
                 .to_string();
             let res = Self {
                 common,
@@ -817,7 +836,7 @@ pub struct PowerConstraint {
 }
 
 impl PowerConstraint {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Power Constraint", |i| {
             let common = CommonFieldsElement { id, len };
 
@@ -843,7 +862,7 @@ pub struct TPCReport {
 }
 
 impl TPCReport {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame TPC Report", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, transmit_power) = le_u8(i)?;
@@ -870,7 +889,7 @@ pub struct SupportedChannelsElement {
 }
 
 impl SupportedChannelsElement {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Supported Channels", |i| {
             let common = CommonFieldsElement { id, len };
             let (i, first_channel) = le_u8(i)?;
@@ -906,7 +925,7 @@ pub struct ChannelSwitchAnnouncement {
 }
 
 impl ChannelSwitchAnnouncement {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Channel Switch Announcement", |i| {
             let common = CommonFieldsElement { id, len };
 
@@ -942,7 +961,7 @@ pub struct QuietElement {
 }
 
 impl QuietElement {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame Quiet Element", |i| {
             let common = CommonFieldsElement { id, len };
 
@@ -989,7 +1008,7 @@ pub struct IBSSDFSChannelMap {
 }
 
 impl IBSSDFSChannelMap {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame Channel Map", |i| {
             let (i, (bss, ofdm_preamble, unidentified, radar, unmeasured)) = bits(tuple((
                 u1::parse,
@@ -1019,7 +1038,7 @@ pub struct IBSSDFSChannelTuple {
 }
 
 impl IBSSDFSChannelTuple {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame IBSSDFS Channel Tuple", |i| {
             let (i, channel_num) = le_u8(i)?;
             let (i, channel_map) = IBSSDFSChannelMap::parse(i)?;
@@ -1045,27 +1064,33 @@ pub struct IBSSDFS {
 
 impl IBSSDFS {
     /// Parses the variable amount of 3 tuple channel maps that follow the header.
-    fn parse_maps(i: parse::Input, len: u8) -> parse::Result<Vec<IBSSDFSChannelTuple>> {
+    fn parse_maps(i: Input, len: u8) -> ParseResult<Vec<IBSSDFSChannelTuple>> {
         let (i, new_i) = take(len)(i)?;
         let (_, res) = many0(IBSSDFSChannelTuple::parse)(new_i)?;
         Ok((i, res))
     }
 
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame IBSSDFS", |i| {
             let common = CommonFieldsElement { id, len };
-
+            let original_i = i;
             let (i, dfs_owner) = Addr::parse(i)?;
             let (i, dfs_recovery_interval) = le_u8(i)?;
-            let (i, channel_maps) = Self::parse_maps(i, common.len - 7)?;
-            let res = Self {
-                common,
-                dfs_owner,
-                dfs_recovery_interval,
-                channel_maps,
-            };
 
-            Ok((i, res))
+            if let Some(len) = common.len.checked_sub(7) {
+                let (i, channel_maps) = Self::parse_maps(i, len)?;
+                let res = Self {
+                    common,
+                    dfs_owner,
+                    dfs_recovery_interval,
+                    channel_maps,
+                };
+
+                Ok((i, res))
+            } else {
+                let err_slice = &original_i[..original_i.offset(i)];
+                Err(nom::Err::Error(Error::malformed(err_slice)))
+            }
         })(i)
     }
 }
@@ -1088,7 +1113,7 @@ pub struct ERPInfo {
 }
 
 impl ERPInfo {
-    pub fn parse(i: parse::Input, id: u8, len: u8) -> parse::Result<Self> {
+    pub fn parse(i: Input, id: u8, len: u8) -> ParseResult<Self> {
         context("802.11 Management Frame IBSSDFS", |i| {
             let common = CommonFieldsElement { id, len };
 
@@ -1108,16 +1133,16 @@ impl ERPInfo {
 
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct BeaconFrameBody {
-    #[debug(format = "{:X}")]
+    #[debug(format = "0x{:X}")]
     pub timestamp: u64,
-    #[debug(format = "{:04X}")]
+    #[debug(format = "0x{:04X}")]
     pub beacon_interval: u16,
     pub capability_info: CapabilityInfo,
     pub dynamic_fields: Vec<Element>,
 }
 
 impl BeaconFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: Beacon Body", |i| {
             let (i, timestamp) = le_u64(i)?;
             let (i, beacon_interval) = le_u16(i)?;
@@ -1143,7 +1168,7 @@ pub struct ProbeRequestFrameBody {
 }
 
 impl ProbeRequestFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: Probe request body", |i| {
             let (i, ssid) = Element::parse(i)?;
             let (i, supported_rates) = Element::parse(i)?;
@@ -1161,16 +1186,16 @@ impl ProbeRequestFrameBody {
 
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct ProbeResponseFrameBody {
-    #[debug(format = "{:X}")]
+    #[debug(format = "0x{:X}")]
     pub timestamp: u64,
-    #[debug(format = "{:04X}")]
+    #[debug(format = "0x{:04X}")]
     pub beacon_interval: u16,
     pub capability_info: CapabilityInfo,
     pub dynamic_fields: Vec<Element>,
 }
 
 impl ProbeResponseFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: Probe repsonse body", |i| {
             let (i, timestamp) = le_u64(i)?;
             let (i, beacon_interval) = le_u16(i)?;
@@ -1191,14 +1216,14 @@ impl ProbeResponseFrameBody {
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct AssociationRequestFrameBody {
     pub capability_info: CapabilityInfo,
-    #[debug(format = "{:04X}")]
+    #[debug(format = "0x{:04X}")]
     pub listen_interval: u16,
     pub ssid: Element,
     pub supported_rates: Element,
 }
 
 impl AssociationRequestFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: association request body", |i| {
             let (i, capability_info) = CapabilityInfo::parse(i)?;
             let (i, listen_interval) = le_u16(i)?;
@@ -1219,7 +1244,7 @@ impl AssociationRequestFrameBody {
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct ReassociationRequestFrameBody {
     pub capability_info: CapabilityInfo,
-    #[debug(format = "{:04X}")]
+    #[debug(format = "0x{:04X}")]
     pub listen_interval: u16,
     pub current_ap_address: Addr,
     pub ssid: Element,
@@ -1227,7 +1252,7 @@ pub struct ReassociationRequestFrameBody {
 }
 
 impl ReassociationRequestFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: reassociation request body", |i| {
             let (i, capability_info) = CapabilityInfo::parse(i)?;
             let (i, listen_interval) = le_u16(i)?;
@@ -1251,13 +1276,13 @@ impl ReassociationRequestFrameBody {
 pub struct AssociationResponseFrameBody {
     pub capability_info: CapabilityInfo,
     pub status_code: String,
-    #[debug(format = "{:04X}")]
+    #[debug(format = "0x{:04X}")]
     pub association_id: u16,
     pub supported_rates: Element,
 }
 
 impl AssociationResponseFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: association request body", |i| {
             let (i, capability_info) = CapabilityInfo::parse(i)?;
             let (i, status_code) = StatusCode::parse(i)?;
@@ -1278,14 +1303,14 @@ impl AssociationResponseFrameBody {
 #[derive(CustomDebug, Serialize, Deserialize)]
 pub struct AuthenticationFrameBody {
     pub algo_num: Option<AuthenticationAlgorithm>,
-    #[debug(format = "{:04X}")]
+    #[debug(format = "0x{:04X}")]
     pub auth_seq: u16,
     pub status_code: String,
     pub challenge_text: Element,
 }
 
 impl AuthenticationFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: auth frame body", |i| {
             let (i, algo_num) = AuthenticationAlgorithm::parse(i)?;
             let (i, auth_seq) = le_u16(i)?;
@@ -1309,7 +1334,7 @@ pub struct DeauthenticationFrameBody {
 }
 
 impl DeauthenticationFrameBody {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: Input) -> ParseResult<Self> {
         context("802.11 Management Frame: deauthentication", |i| {
             let (i, reason_code) = ReasonCode::parse(i)?;
             let res = Self { reason_code };

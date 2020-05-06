@@ -48,7 +48,7 @@ impl fmt::Debug for Addr {
 }
 
 impl Addr {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         let (i, slice) = context("IPv6 address", take(16_usize))(i)?;
         let mut res = Self::default();
         res.0.copy_from_slice(slice);
@@ -75,7 +75,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("IPv6 frame", |i| {
             let (i, (version, traffic_class, flow_label)) =
                 bits(tuple((u4::parse, u8::parse, u20::parse)))(i)?;

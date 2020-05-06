@@ -18,7 +18,7 @@ pub struct Datagram {
 }
 
 impl Datagram {
-    pub fn parse(i: parse::Input) -> parse::Result<Self> {
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
         context("UDP Frame", |i| {
             let (i, (src_port, dst_port, len, checksum)) =
                 tuple((be_u16, be_u16, be_u16, be_u16))(i)?;
