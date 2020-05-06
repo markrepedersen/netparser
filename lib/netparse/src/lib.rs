@@ -216,10 +216,10 @@ pub fn run(opts: &PacketOptions) -> Result<(), Box<dyn Error>> {
     loop {
         match cap.next() {
             Ok(packet) => {
-                // if opts.hex_dump {
-                writeln!(&mut writer, "{:X}", HexSlice::new(packet.data))?;
-                writeln!(&mut writer)?;
-                // }
+                if opts.hex_dump {
+                    writeln!(&mut writer, "{:X}", HexSlice::new(packet.data))?;
+                    writeln!(&mut writer)?;
+                }
 
                 match link_type {
                     Linktype(1) | Linktype(105) => write_packet(packet.data, &mut writer, opts)?,
