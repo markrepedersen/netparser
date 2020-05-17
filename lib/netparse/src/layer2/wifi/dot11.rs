@@ -168,12 +168,7 @@ impl Subtype {
 }
 
 #[derive(CustomDebug, Serialize, Deserialize, Clone)]
-pub struct FrameControl {
-    #[debug(format = "{}")]
-    pub version: u2,
-    pub typ: Type,
-    pub subtype: Subtype,
-
+pub struct ControlFlags {
     #[debug(format = "{}")]
     pub to_ds: u1,
 
@@ -199,13 +194,10 @@ pub struct FrameControl {
     pub order: u1,
 }
 
-impl FrameControl {
+impl ControlFlags {
     #[cfg_attr(rustfmt, rustfmt_skip)]
     pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
-        context("802.11 Frame Control", |i| {
-            let (i, (subtype, typ, version)) = bits(tuple((u4::parse, u2::parse, u2::parse)))(i)?;
-            let typ = Type::from(typ);
-            let subtype = Subtype::from_type(typ.clone(), subtype);
+        context("802.11 Frame Control Flags", |i| {
 	    let (i, (order, protected, more_data, power_mgmt, retry, more_fragments, from_ds, to_ds)) =
                 bits(tuple((
                     u1::parse,
@@ -217,11 +209,7 @@ impl FrameControl {
                     u1::parse,
                     u1::parse,
                 )))(i)?;
-
             let res = Self {
-                version,
-                typ,
-                subtype,
                 to_ds,
                 from_ds,
                 more_fragments,
@@ -230,6 +218,35 @@ impl FrameControl {
                 more_data,
                 protected,
                 order,
+            };
+
+            return Ok((i, res));
+        })(i)
+    }
+}
+
+#[derive(CustomDebug, Serialize, Deserialize, Clone)]
+pub struct FrameControl {
+    #[debug(format = "{}")]
+    pub version: u2,
+    pub typ: Type,
+    pub subtype: Subtype,
+    pub flags: ControlFlags,
+}
+
+impl FrameControl {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+    pub fn parse(i: parse::Input) -> parse::ParseResult<Self> {
+        context("802.11 Frame Control", |i| {
+            let (i, (subtype, typ, version)) = bits(tuple((u4::parse, u2::parse, u2::parse)))(i)?;
+	    let (i, flags) = ControlFlags::parse(i)?;
+            let typ = Type::from(typ);
+            let subtype = Subtype::from_type(typ.clone(), subtype);
+            let res = Self {
+                version,
+                typ,
+                subtype,
+		flags
             };
 
             return Ok((i, res));
@@ -275,7 +292,7 @@ pub enum FrameBody {
 
 impl FrameBody {
     fn parse<'a>(fc: &FrameControl, i: parse::Input<'a>) -> parse::ParseResult<'a, Self> {
-        if fc.protected == u1::new(1) {
+        if fc.flags.protected == u1::new(1) {
             if let Some(len) = i.len().checked_sub(SEQ_CONTROL_SIZE) {
                 let (i, _) = take(len)(i)?;
                 let blob = Blob::new(i);
@@ -363,7 +380,7 @@ pub struct Frame {
     pub seq_control: Option<SeqControl>,
     pub addr4: Option<Dot11Addr>,
     pub frame_body: FrameBody,
-    #[debug(format = "0x{:04X}")]
+    #[debug(format = "0x{:08X}")]
     pub fcs: u32,
 }
 
@@ -374,14 +391,14 @@ impl Frame {
         let res = match fc.typ {
             Type::Data => {
 		let (i, (addr1, addr2, addr3, seq_control)) = tuple((Addr::parse, Addr::parse, Addr::parse, SeqControl::parse))(i)?;
-		match fc {
-                    FrameControl { to_ds: x, from_ds: y, .. } if x == u1::new(0) && y == u1::new(0) => {
+		match fc.flags {
+                    ControlFlags { to_ds: x, from_ds: y, .. } if x == u1::new(0) && y == u1::new(0) => {
 			(i, (DestinationAddress(addr1), Some(SourceAddress(addr2)), Some(BSSID(addr3)), Some(seq_control), None))
                     }
-                    FrameControl { to_ds: x, from_ds: y, .. } if x == u1::new(1) && y == u1::new(0) => {
+                    ControlFlags { to_ds: x, from_ds: y, .. } if x == u1::new(1) && y == u1::new(0) => {
 			(i, (BSSID(addr1), Some(SourceAddress(addr2)), Some(DestinationAddress(addr3)), Some(seq_control), None))
                     }
-                    FrameControl { to_ds: x, from_ds: y, .. } if x == u1::new(0) && y == u1::new(1) => {
+                    ControlFlags { to_ds: x, from_ds: y, .. } if x == u1::new(0) && y == u1::new(1) => {
 			(i, (DestinationAddress(addr1), Some(BSSID(addr2)), Some(SourceAddress(addr3)), Some(seq_control), None))
                     }
                     _ => {

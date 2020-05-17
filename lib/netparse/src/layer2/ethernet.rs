@@ -31,7 +31,7 @@ impl Frame {
                 Some(datalink::EtherType::ARP) => {
                     map(arp::Packet::parse, datalink::Payload::ARP)(i)?
                 }
-                None => (i, datalink::Payload::Unknown),
+                _ => (i, datalink::Payload::Unknown),
             };
 
             let res = Self {

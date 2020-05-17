@@ -19,10 +19,20 @@ pub enum Protocol {
     ICMP = 1,
     TCP = 6,
     UDP = 17,
+    Unknown = 100,
 }
 
 impl Protocol {
     pub fn parse(i: parse::Input) -> parse::ParseResult<Option<Self>> {
-        context("IPv4 Protocol", map(be_u8, Self::try_from))(i)
+        context(
+            "IPv4 Protocol",
+            map(be_u8, |i| {
+                let protocol: Option<Self> = Self::try_from(i);
+                match protocol {
+                    Some(p) => Some(p),
+                    None => Some(Self::Unknown),
+                }
+            }),
+        )(i)
     }
 }

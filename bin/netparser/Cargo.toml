@@ -8,3 +8,7 @@ description = "Binary application for sniffing network packets."
 [dependencies]
 clap = { git = "https://github.com/clap-rs/clap/" }
 netparse = { path = "../../lib/netparse" }
+tui = "0.9"
+termion = "1.5"
+pcap = "0.7.0"
+crossbeam = "0.7"

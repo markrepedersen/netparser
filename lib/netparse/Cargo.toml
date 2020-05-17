@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 paste = "0.1.7"
-pcap = "0.7.0"
 custom_debug_derive = "0.4.0"
 derive-try-from-primitive = "0.1.0"
 nom = "5.0.1"

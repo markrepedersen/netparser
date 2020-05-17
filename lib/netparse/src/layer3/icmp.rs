@@ -1,5 +1,4 @@
-use crate::core::blob::Blob;
-use crate::parse;
+use crate::core::{blob::Blob, parse};
 
 use custom_debug_derive::*;
 use nom::{

@@ -51,10 +51,20 @@ pub enum EtherType {
     IPv4 = 0x0800,
     IPv6 = 0x86dd,
     ARP = 0x0806,
+    Unknown,
 }
 
 impl EtherType {
     pub fn parse(i: parse::Input) -> parse::ParseResult<Option<Self>> {
-        context("EtherType", map(be_u16, Self::try_from))(i)
+        context(
+            "EtherType",
+            map(be_u16, |i| {
+                let ether_type = Self::try_from(i);
+                match ether_type {
+                    Some(e) => Some(e),
+                    None => Some(Self::Unknown),
+                }
+            }),
+        )(i)
     }
 }
