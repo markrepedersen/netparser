@@ -10,7 +10,7 @@ use netparse::{
         arp, datalink, ethernet,
         wifi::{dot11, radiotap},
     },
-    layer3::ip::{ip, ipv4},
+    layer3::ip::{ip, ipv4, ipv6, tcp, udp},
 };
 use pcap;
 use std::{
@@ -133,87 +133,159 @@ impl Capture {
     }
 
     fn capture_arp_frame(table: &mut MutexGuard<StatefulTable>, frame: &arp::Packet, count: usize) {
-        table.push(
-            frame.sender_hw_addr.to_string(),
-            "SENDER_HW_SRC".to_string(),
-            Constraint::Percentage(10),
-            count,
+        // Self::add(
+        //     table,
+        //     frame.sender_hw_addr.to_string(),
+        //     "SENDER_HW_SRC".to_string(),
+        //     10,
+        //     count,
+        // );
+        // Self::add(
+        //     table,
+        //     frame.target_hw_addr.to_string(),
+        //     "SENDER_HW_DST".to_string(),
+        //     10,
+        //     count,
+        // );
+        // Self::add(
+        //     table,
+        //     frame.sender_ip_addr.to_string(),
+        //     "SENDER_IP_SRC".to_string(),
+        //     10,
+        //     count,
+        // );
+        // Self::add(
+        //     table,
+        //     frame.target_ip_addr.to_string(),
+        //     "TARGET_IP_DST".to_string(),
+        //     10,
+        //     count,
+        // );
+    }
+
+    fn add(
+        table: &mut MutexGuard<StatefulTable>,
+        field: String,
+        header: String,
+        len: u16,
+        index: usize,
+    ) {
+        table.push(field, header, Constraint::Percentage(len), index);
+    }
+
+    fn capture_tcp_packet(
+        table: &mut MutexGuard<StatefulTable>,
+        packet: &tcp::Packet,
+        index: usize,
+    ) {
+        Self::add(
+            table,
+            packet.src_port.to_string(),
+            "SRC_PORT".to_string(),
+            5,
+            index,
         );
-        table.push(
-            frame.target_hw_addr.to_string(),
-            "SENDER_HW_DST".to_string(),
-            Constraint::Percentage(10),
-            count,
-        );
-        table.push(
-            frame.sender_ip_addr.to_string(),
-            "SENDER_IP_SRC".to_string(),
-            Constraint::Percentage(10),
-            count,
-        );
-        table.push(
-            frame.target_ip_addr.to_string(),
-            "TARGET_IP_DST".to_string(),
-            Constraint::Percentage(10),
-            count,
+        Self::add(
+            table,
+            packet.dst_port.to_string(),
+            "DST_PORT".to_string(),
+            5,
+            index,
         );
     }
 
-    fn capture_ip_packet(
+    fn capture_udp_packet(
+        table: &mut MutexGuard<StatefulTable>,
+        packet: &udp::Datagram,
+        index: usize,
+    ) {
+        Self::add(
+            table,
+            packet.src_port.to_string(),
+            "SRC_PORT".to_string(),
+            5,
+            index,
+        );
+        Self::add(
+            table,
+            packet.dst_port.to_string(),
+            "DST_PORT".to_string(),
+            5,
+            index,
+        );
+    }
+
+    fn capture_ipv4_packet(
         table: &mut MutexGuard<StatefulTable>,
         packet: &ipv4::Packet,
-        count: usize,
+        index: usize,
     ) {
         if let Some(ref proto) = packet.protocol {
-            table.push(
-                format!("{:?}", proto),
-                "TRANSPORT".to_string(),
-                Constraint::Percentage(5),
-                count,
-            );
+            Self::add(table, format!("{:?}", proto), "L3".to_string(), 5, index);
         }
 
-        table.push(
-            packet.dst.to_string(),
+        Self::add(
+            table,
+            packet.src.to_string(),
             "IP_SRC".to_string(),
-            Constraint::Percentage(10),
-            count,
+            24,
+            index,
         );
-
-        table.push(
+        Self::add(
+            table,
             packet.dst.to_string(),
             "IP_DST".to_string(),
-            Constraint::Percentage(10),
-            count,
+            24,
+            index,
         );
-
         if let ip::Payload::TCP(ref packet) = packet.payload {
-            table.push(
-                packet.src_port.to_string(),
-                "SRC_PORT".to_string(),
-                Constraint::Percentage(5),
-                count,
-            );
-            table.push(
-                packet.dst_port.to_string(),
-                "DST_PORT".to_string(),
-                Constraint::Percentage(5),
-                count,
-            );
+            Self::capture_tcp_packet(table, &packet, index);
         } else if let ip::Payload::UDP(ref packet) = packet.payload {
-            table.push(
-                packet.src_port.to_string(),
-                "SRC_PORT".to_string(),
-                Constraint::Percentage(5),
-                count,
-            );
-            table.push(
-                packet.dst_port.to_string(),
-                "DST_PORT".to_string(),
-                Constraint::Percentage(5),
-                count,
-            );
+            Self::capture_udp_packet(table, &packet, index);
         }
+    }
+
+    fn capture_ipv6_packet(
+        table: &mut MutexGuard<StatefulTable>,
+        packet: &ipv6::Packet,
+        index: usize,
+    ) {
+        if let Some(ref proto) = packet.protocol {
+            Self::add(table, format!("{:?}", proto), "L3".to_string(), 5, index);
+        }
+
+        Self::add(
+            table,
+            packet.src.to_string(),
+            "IP_SRC".to_string(),
+            24,
+            index,
+        );
+        Self::add(
+            table,
+            packet.dst.to_string(),
+            "IP_DST".to_string(),
+            24,
+            index,
+        );
+        if let ip::Payload::TCP(ref packet) = packet.payload {
+            Self::capture_tcp_packet(table, &packet, index);
+        } else if let ip::Payload::UDP(ref packet) = packet.payload {
+            Self::capture_udp_packet(table, &packet, index);
+        }
+    }
+
+    fn capture_payload(
+        table: &mut MutexGuard<StatefulTable>,
+        packet: &Option<Payload>,
+        index: usize,
+    ) {
+        match packet {
+            Some(Payload::ARP(ref packet)) => Self::capture_arp_frame(table, packet, index),
+            Some(Payload::IPv4(ref packet)) => Self::capture_ipv4_packet(table, packet, index),
+            Some(Payload::IPv6(ref packet)) => Self::capture_ipv6_packet(table, packet, index),
+            _ => {}
+        };
     }
 
     fn capture_packets(&self, table: &Arc<Mutex<StatefulTable>>, receiver: &Receiver<Event>) {
@@ -237,30 +309,27 @@ impl Capture {
                 break;
             }
 
-            if let Ok(mut table) = table.lock() {
-                table.push(
-                    index.to_string(),
-                    "NUM".to_string(),
-                    Constraint::Percentage(5),
-                    index,
-                );
-            }
-
             match link_type {
                 pcap::Linktype(1) => {
                     if let Ok((_, frame)) = ethernet::Frame::parse(packet.data) {
                         if let Ok(mut table) = table.lock() {
-                            if let Some(Payload::IPv4(ref packet)) = frame.payload {
-                                if let Some(ref ether_type) = frame.ether_type {
-                                    table.push(
-                                        format!("{:?}", ether_type),
-                                        "ETHERTYPE".to_string(),
-                                        Constraint::Percentage(5),
-                                        index,
-                                    );
-                                }
-                                Self::capture_ip_packet(&mut table, &packet, index);
+                            table.push(
+                                index.to_string(),
+                                "N".to_string(),
+                                Constraint::Percentage(5),
+                                index,
+                            );
+
+                            if let Some(ref ether_type) = frame.ether_type {
+                                table.push(
+                                    format!("{:?}", ether_type),
+                                    "L2".to_string(),
+                                    Constraint::Percentage(5),
+                                    index,
+                                );
                             }
+
+                            Self::capture_payload(&mut table, &frame.payload, index);
                         }
                     }
                 }
