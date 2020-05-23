@@ -1,3 +1,5 @@
+use crate::draw::draw;
+use crate::table::*;
 use crossbeam::{
     self,
     channel::{Receiver, Sender},
@@ -7,12 +9,14 @@ use crossbeam::{
 use datalink::Payload;
 use netparse::{
     layer2::{
-        arp, datalink, ethernet,
+        arp,
+        datalink::{self, Frame},
+        ethernet,
         wifi::{dot11, radiotap},
     },
     layer3::ip::{ip, ipv4, ipv6, tcp, udp},
 };
-use pcap;
+use pcap::{self, Linktype};
 use std::{
     default::Default,
     io::{self, stdin, stdout},
@@ -22,18 +26,13 @@ use std::{
 use termion::{
     event::Key, input::MouseTerminal, input::TermRead, raw::IntoRawMode, screen::AlternateScreen,
 };
-use tui::{
-    backend::{Backend, TermionBackend},
-    layout::Constraint,
-    style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Row, Table, TableState},
-    Terminal,
-};
+use tui::{backend::TermionBackend, layout::Constraint, Terminal};
 
 pub enum Event {
     Key,
     Tick,
     Paused,
+    Selected,
     Disconnected,
 }
 
@@ -83,53 +82,6 @@ impl Capture {
     pub fn with_filter(&mut self, filter: String) -> &Self {
         self.filter = filter;
         self
-    }
-
-    pub fn draw<B: Backend>(
-        terminal: &mut Terminal<B>,
-        table: &Arc<Mutex<StatefulTable>>,
-    ) -> Result<(), io::Error> {
-        terminal.draw(|mut f| {
-            if let Ok(mut data) = table.lock() {
-                let selected_style = Style::default()
-                    .fg(Color::White)
-                    .modifier(Modifier::BOLD | Modifier::ITALIC);
-                let normal_style = Style::default().fg(Color::Blue).modifier(Modifier::ITALIC);
-                let headers = data.headers.clone();
-                let records = data.records.clone();
-                let widths = data.widths.clone();
-                let rows = records
-                    .iter()
-                    .map(|i| Row::StyledData(i.into_iter(), normal_style));
-                let t = Table::new(headers.into_iter(), rows)
-                    .block(
-                        Block::default()
-                            .title("Packets")
-                            .title_style(
-                                Style::default()
-                                    .fg(Color::DarkGray)
-                                    .modifier(Modifier::BOLD),
-                            )
-                            .borders(Borders::ALL)
-                            .border_type(BorderType::Rounded),
-                    )
-                    .header_style(
-                        Style::default()
-                            .fg(Color::DarkGray)
-                            .modifier(Modifier::BOLD | Modifier::ITALIC),
-                    )
-                    .widths(&widths[..])
-                    .highlight_style(selected_style)
-                    .column_spacing(5)
-                    .highlight_symbol(">> ");
-
-                if records.len() > 0 {
-                    f.render_stateful_widget(t, f.size(), &mut data.state);
-                }
-            }
-        })?;
-
-        Ok(())
     }
 
     fn capture_arp_frame(table: &mut MutexGuard<StatefulTable>, frame: &arp::Packet, count: usize) {
@@ -221,7 +173,7 @@ impl Capture {
         index: usize,
     ) {
         if let Some(ref proto) = packet.protocol {
-            Self::add(table, format!("{:?}", proto), "L3".to_string(), 5, index);
+            Self::add(table, format!("{:?}", proto), "L4".to_string(), 5, index);
         }
 
         Self::add(
@@ -251,7 +203,7 @@ impl Capture {
         index: usize,
     ) {
         if let Some(ref proto) = packet.protocol {
-            Self::add(table, format!("{:?}", proto), "L3".to_string(), 5, index);
+            Self::add(table, format!("{:?}", proto), "L4".to_string(), 5, index);
         }
 
         Self::add(
@@ -277,14 +229,87 @@ impl Capture {
 
     fn capture_payload(
         table: &mut MutexGuard<StatefulTable>,
-        packet: &Option<Payload>,
+        payload: &Option<Payload>,
         index: usize,
     ) {
-        match packet {
+        match payload {
             Some(Payload::ARP(ref packet)) => Self::capture_arp_frame(table, packet, index),
             Some(Payload::IPv4(ref packet)) => Self::capture_ipv4_packet(table, packet, index),
             Some(Payload::IPv6(ref packet)) => Self::capture_ipv6_packet(table, packet, index),
             _ => {}
+        };
+    }
+
+    fn capture_dot11_addr(
+        table: &mut MutexGuard<StatefulTable>,
+        addr: &dot11::Dot11Addr,
+        index: usize,
+    ) {
+        use dot11::Dot11Addr::*;
+        match addr {
+            BSSID(addr) => Self::add(table, addr.to_string(), "BSSID".to_string(), 12, index),
+            SourceAddress(addr) => {
+                Self::add(table, addr.to_string(), "BSSID".to_string(), 12, index)
+            }
+            DestinationAddress(addr) => {
+                Self::add(table, addr.to_string(), "DST_ADDR".to_string(), 12, index)
+            }
+            ReceiverAddress(addr) => {
+                Self::add(table, addr.to_string(), "RECV_ADDR".to_string(), 12, index)
+            }
+            TransmitterAddress(addr) => {
+                Self::add(table, addr.to_string(), "TRM_ADDR".to_string(), 12, index)
+            }
+        }
+    }
+
+    fn capture_dot11_frame(
+        table: &mut MutexGuard<StatefulTable>,
+        frame: &dot11::Frame,
+        index: usize,
+    ) {
+        table.push(
+            index.to_string(),
+            "N".to_string(),
+            Constraint::Percentage(5),
+            index,
+        );
+        Self::capture_dot11_addr(table, &frame.addr1, index);
+        if let Some(ref addr) = frame.addr2 {
+            Self::capture_dot11_addr(table, &addr, index);
+        }
+        if let Some(ref addr) = frame.addr3 {
+            Self::capture_dot11_addr(table, &addr, index);
+        }
+        if let Some(ref addr) = frame.addr4 {
+            Self::capture_dot11_addr(table, &addr, index);
+        }
+    }
+
+    fn capture_frame(table: &mut MutexGuard<StatefulTable>, frame: &Frame, index: usize) {
+        table.push(
+            index.to_string(),
+            "N".to_string(),
+            Constraint::Percentage(5),
+            index,
+        );
+
+        match frame {
+            Frame::Ethernet(ref frame) => {
+                if let Some(ref ether_type) = frame.ether_type {
+                    Self::add(
+                        table,
+                        format!("{:?}", ether_type),
+                        "L3".to_string(),
+                        5,
+                        index,
+                    );
+                }
+
+                Self::capture_payload(table, &frame.payload, index);
+            }
+
+            Frame::Dot11(ref frame) => Self::capture_dot11_frame(table, frame, index),
         };
     }
 
@@ -300,50 +325,47 @@ impl Capture {
             .buffer_size(512)
             .open()
             .expect("There was a problem capturing on that interface.");
-        let link_type = cap.get_datalink();
         cap.filter(filters.as_str())
             .expect("Invalid filter provided");
+
+        let link_type = cap.get_datalink();
 
         while let Ok(packet) = cap.next() {
             if let Ok(Event::Disconnected) = receiver.try_recv() {
                 break;
             }
 
-            match link_type {
-                pcap::Linktype(1) => {
-                    if let Ok((_, frame)) = ethernet::Frame::parse(packet.data) {
-                        if let Ok(mut table) = table.lock() {
-                            table.push(
-                                index.to_string(),
-                                "N".to_string(),
-                                Constraint::Percentage(5),
-                                index,
-                            );
-
-                            if let Some(ref ether_type) = frame.ether_type {
-                                table.push(
-                                    format!("{:?}", ether_type),
-                                    "L2".to_string(),
-                                    Constraint::Percentage(5),
-                                    index,
-                                );
-                            }
-
-                            Self::capture_payload(&mut table, &frame.payload, index);
+            if let Ok(mut table) = table.lock() {
+                match link_type {
+                    Linktype(1) => {
+                        if let Ok((_, frame)) = ethernet::Frame::parse(packet.data) {
+                            let frame = Frame::Ethernet(frame);
+                            Self::capture_frame(&mut table, &frame, index);
+                            table.frames.push(frame);
                         }
                     }
-                }
 
-                pcap::Linktype(105) => if let Ok((_, frame)) = dot11::Frame::parse(packet.data) {},
-
-                pcap::Linktype(127) => {
-                    if let Ok((r, _)) = radiotap::RadioTapHeader::parse(packet.data) {
-                        if let Ok((_, frame)) = dot11::Frame::parse(r) {}
+                    Linktype(105) => {
+                        if let Ok((_, frame)) = dot11::Frame::parse(packet.data) {
+                            let frame = Frame::Dot11(frame);
+                            Self::capture_frame(&mut table, &frame, index);
+                            table.frames.push(frame);
+                        }
                     }
-                }
 
-                _ => unimplemented!("Unsupported interface: {:?}", link_type),
-            };
+                    Linktype(127) => {
+                        if let Ok((remaining, _)) = radiotap::RadioTapHeader::parse(packet.data) {
+                            if let Ok((_, frame)) = dot11::Frame::parse(remaining) {
+                                let frame = Frame::Dot11(frame);
+                                Self::capture_frame(&mut table, &frame, index);
+                                table.frames.push(frame);
+                            }
+                        }
+                    }
+
+                    _ => unimplemented!("Unsupported interface: {:?}", link_type),
+                };
+            }
             index = index + 1;
         }
     }
@@ -357,6 +379,7 @@ impl Capture {
             if let Ok(Event::Disconnected) = receiver.try_recv() {
                 break;
             }
+
             let stdin = stdin();
             for evt in stdin.keys() {
                 match evt {
@@ -365,6 +388,7 @@ impl Capture {
                             match key {
                                 Key::Char('q') => sender.send(Event::Disconnected).unwrap_or(()),
                                 Key::Char(' ') => sender.send(Event::Paused).unwrap_or(()),
+                                Key::Insert => sender.send(Event::Selected).unwrap_or(()),
                                 Key::Down => data.next(false),
                                 Key::Ctrl(key) if key == 'n' => data.next(false),
                                 Key::Ctrl(key) if key == 'p' => data.previous(false),
@@ -408,7 +432,7 @@ impl Capture {
             terminal
         };
 
-        Self::draw(&mut terminal, &table)?;
+        draw(&mut terminal, table, receiver)?;
 
         loop {
             match receiver.recv() {
@@ -416,7 +440,7 @@ impl Capture {
                     terminal.clear()?;
                     std::process::exit(0);
                 }
-                Ok(Event::Key) | Ok(Event::Tick) => Self::draw(&mut terminal, &table)?,
+                Ok(Event::Key) | Ok(Event::Tick) => draw(&mut terminal, table, receiver)?,
                 _ => {}
             }
         }
@@ -436,76 +460,4 @@ impl Capture {
 
         Ok(())
     }
-}
-
-#[allow(dead_code)]
-pub struct StatefulTable {
-    state: TableState,
-    headers: Vec<String>,
-    widths: Vec<Constraint>,
-    records: Vec<Vec<String>>,
-}
-
-impl StatefulTable {
-    fn new() -> StatefulTable {
-        StatefulTable {
-            state: TableState::default(),
-            headers: vec![],
-            widths: vec![],
-            records: vec![],
-        }
-    }
-
-    pub fn push(&mut self, item: String, header: String, width: Constraint, index: usize) {
-        if let Some(rec) = self.records.get_mut(index) {
-            rec.push(item);
-        } else {
-            let rec = vec![item];
-            self.records.push(rec);
-        }
-        if !self.headers.contains(&header) {
-            self.headers.push(header);
-            self.widths.push(width);
-        }
-    }
-
-    pub fn next(&mut self, long: bool) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.records.len() - 1 {
-                    0
-                } else {
-                    if long {
-                        i + 10
-                    } else {
-                        i + 1
-                    }
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-
-    pub fn previous(&mut self, long: bool) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.records.len() - 1
-                } else {
-                    if long {
-                        i - 10
-                    } else {
-                        i - 1
-                    }
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-}
-
-pub fn run_app() -> Result<(), io::Error> {
-    Capture::create_capture().with_wireless(false).start()
 }

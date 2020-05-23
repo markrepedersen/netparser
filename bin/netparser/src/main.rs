@@ -1,6 +1,8 @@
-mod app;
+mod capture;
+mod draw;
+mod table;
 
-use crate::app::run_app;
+use crate::capture::Capture;
 use clap::Clap;
 use std::io;
 
@@ -61,7 +63,7 @@ pub struct CLI {
 
 fn main() -> Result<(), io::Error> {
     #[cfg(target_os = "windows")]
-    compile_error!("Sorry, no implementations for Windows yet :( - PRs welcome!");
+    compile_error!("Sorry, no implementations for Windows.");
     // let cli: CLI = CLI::parse();
     // let opts = PacketOptions {
     //     interface: cli.interface,
@@ -78,9 +80,7 @@ fn main() -> Result<(), io::Error> {
     //     ipv6: cli.ipv6,
     // };
 
-    // run(&opts).expect("There was a problem parsing a packet(s)");
-
-    run_app()?;
+    Capture::create_capture().with_wireless(true).start()?;
 
     Ok(())
 }

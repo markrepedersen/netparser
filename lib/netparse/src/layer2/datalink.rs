@@ -1,9 +1,22 @@
-use crate::{core::parse, layer2::arp, layer3::ip::ipv4, layer3::ip::ipv6};
+use crate::{
+    core::parse,
+    layer2::arp,
+    layer2::{ethernet, wifi::dot11},
+    layer3::ip::ipv4,
+    layer3::ip::ipv6,
+};
 
 use derive_try_from_primitive::*;
 use nom::{bytes::complete::take, combinator::map, error::context, number::complete::be_u16};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Debug};
+
+/// A datalink frame - ethernet or 802.11x.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Frame {
+    Dot11(dot11::Frame),
+    Ethernet(ethernet::Frame),
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct Addr(pub [u8; 6]);
