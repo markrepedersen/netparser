@@ -64,23 +64,11 @@ pub struct CLI {
 fn main() -> Result<(), io::Error> {
     #[cfg(target_os = "windows")]
     compile_error!("Sorry, no implementations for Windows.");
-    // let cli: CLI = CLI::parse();
-    // let opts = PacketOptions {
-    //     interface: cli.interface,
-    //     hex_dump: cli.hex_dump,
-    //     json: cli.json,
-    //     file_name: cli.file_name,
-    //     wireless: cli.wireless,
-    //     filter: cli.filter,
-    //     udp: cli.udp,
-    //     tcp: cli.tcp,
-    //     icmp: cli.icmp,
-    //     arp: cli.arp,
-    //     ipv4: cli.ipv4,
-    //     ipv6: cli.ipv6,
-    // };
+    let cli: CLI = CLI::parse();
+    let mut capture = Capture::new();
 
-    Capture::create_capture().with_wireless(true).start()?;
-
+    capture.with_interface(cli.interface);
+    capture.with_wireless(cli.wireless);
+    capture.start()?;
     Ok(())
 }

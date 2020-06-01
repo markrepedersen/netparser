@@ -1,28 +1,50 @@
 use crate::capture::Event;
 use crate::table::*;
+
 use crossbeam::channel::Receiver;
+use io::stdout;
+use netparse::layer2::datalink::Frame;
 use std::{
     io,
     sync::{Arc, Mutex, MutexGuard},
 };
+use termion::{input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
+use tui::backend::TermionBackend;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Row, Table},
+    widgets::{Block, BorderType, Borders, Paragraph, Row, Table, Text},
     Terminal,
 };
 
-fn draw_frame_excerpt<B: Backend>(
-    f: &mut tui::Frame<B>,
-    table: &MutexGuard<StatefulTable>,
-    area: Rect,
-) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title("Footer")
-        .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD));
-    f.render_widget(block, area);
+fn draw_frame_excerpt<B: Backend>(f: &mut tui::Frame<B>, frame: &Frame, area: Rect) {
+    use Frame::*;
+    match frame {
+        Ethernet(frame) => {
+            let text = [
+                Text::styled(
+                    format!("IP_SRC: {:?}\n", frame.src),
+                    Style::default().fg(Color::White),
+                ),
+                Text::styled(
+                    format!("IP_DST: {:?}\n", frame.dst),
+                    Style::default().fg(Color::White),
+                ),
+                Text::styled(
+                    format!("IP_DST: {:?}\n", frame.dst),
+                    Style::default().fg(Color::White),
+                ),
+            ];
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title("Frame View")
+                .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD));
+            let paragraph = Paragraph::new(text.iter()).block(block).wrap(true);
+            f.render_widget(paragraph, area);
+        }
+        Dot11(frame) => {}
+    };
 }
 
 fn draw_table<B: Backend>(
@@ -69,7 +91,7 @@ fn draw_table<B: Backend>(
 
 fn get_rendering_area<B: Backend>(f: &mut tui::Frame<B>, footer: bool) -> Vec<Rect> {
     let constraints = if footer {
-        vec![Constraint::Percentage(80), Constraint::Percentage(20)]
+        vec![Constraint::Percentage(50), Constraint::Percentage(50)]
     } else {
         vec![Constraint::Percentage(100)]
     };
@@ -80,23 +102,42 @@ fn get_rendering_area<B: Backend>(f: &mut tui::Frame<B>, footer: bool) -> Vec<Re
         .split(f.size())
 }
 
-pub fn draw<B: Backend>(
-    terminal: &mut Terminal<B>,
+pub fn draw(
     table: &Arc<Mutex<StatefulTable>>,
     receiver: &Receiver<Event>,
 ) -> Result<(), io::Error> {
-    terminal.draw(|mut f| {
-        if let Ok(mut table) = table.lock() {
-            if let Ok(Event::Selected) = receiver.try_recv() {
-                let chunks = get_rendering_area(&mut f, true);
-                draw_table(&mut f, &mut table, chunks[0]);
-                draw_frame_excerpt(&mut f, &table, chunks[1]);
-            } else {
-                let chunks = get_rendering_area(&mut f, false);
-                draw_table(&mut f, &mut table, chunks[0]);
-            }
-        }
-    })?;
+    let stdout = stdout().into_raw_mode()?;
+    let stdout = MouseTerminal::from(stdout);
+    let stdout = AlternateScreen::from(stdout);
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
-    Ok(())
+    terminal.hide_cursor()?;
+
+    loop {
+        match receiver.recv() {
+            Ok(Event::Disconnected) => {
+                terminal.clear()?;
+                std::process::exit(0);
+            }
+            Ok(Event::Selected) => terminal.draw(|mut f| {
+                if let Ok(mut table) = table.lock() {
+                    let chunks = get_rendering_area(&mut f, true);
+                    draw_table(&mut f, &mut table, chunks[0]);
+                    if let Some(i) = table.get_selected() {
+                        if let Some(frame) = table.frames.get(i) {
+                            draw_frame_excerpt(&mut f, &frame, chunks[1]);
+                        }
+                    }
+                }
+            })?,
+            Ok(Event::Key) | Ok(Event::Tick) => terminal.draw(|mut f| {
+                if let Ok(mut table) = table.lock() {
+                    let chunks = get_rendering_area(&mut f, false);
+                    draw_table(&mut f, &mut table, chunks[0]);
+                }
+            })?,
+            _ => {}
+        }
+    }
 }

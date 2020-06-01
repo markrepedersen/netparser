@@ -1,4 +1,4 @@
-use crate::draw::draw;
+use crate::draw::*;
 use crate::table::*;
 use crossbeam::{
     self,
@@ -9,7 +9,6 @@ use crossbeam::{
 use datalink::Payload;
 use netparse::{
     layer2::{
-        arp,
         datalink::{self, Frame},
         ethernet,
         wifi::{dot11, radiotap},
@@ -19,14 +18,12 @@ use netparse::{
 use pcap::{self, Linktype};
 use std::{
     default::Default,
-    io::{self, stdin, stdout},
+    io::{self, stdin},
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
-use termion::{
-    event::Key, input::MouseTerminal, input::TermRead, raw::IntoRawMode, screen::AlternateScreen,
-};
-use tui::{backend::TermionBackend, layout::Constraint, Terminal};
+use termion::{event::Key, input::TermRead};
+use tui::layout::Constraint;
 
 pub enum Event {
     Key,
@@ -65,10 +62,15 @@ impl Default for Capture {
 }
 
 impl Capture {
-    pub fn create_capture() -> Self {
+    pub fn new() -> Self {
         Self {
             ..Default::default()
         }
+    }
+    #[allow(dead_code)]
+    pub fn with_interface(&mut self, interface: String) -> &Self {
+        self.interface = interface;
+        self
     }
 
     #[allow(dead_code)]
@@ -82,37 +84,6 @@ impl Capture {
     pub fn with_filter(&mut self, filter: String) -> &Self {
         self.filter = filter;
         self
-    }
-
-    fn capture_arp_frame(table: &mut MutexGuard<StatefulTable>, frame: &arp::Packet, count: usize) {
-        // Self::add(
-        //     table,
-        //     frame.sender_hw_addr.to_string(),
-        //     "SENDER_HW_SRC".to_string(),
-        //     10,
-        //     count,
-        // );
-        // Self::add(
-        //     table,
-        //     frame.target_hw_addr.to_string(),
-        //     "SENDER_HW_DST".to_string(),
-        //     10,
-        //     count,
-        // );
-        // Self::add(
-        //     table,
-        //     frame.sender_ip_addr.to_string(),
-        //     "SENDER_IP_SRC".to_string(),
-        //     10,
-        //     count,
-        // );
-        // Self::add(
-        //     table,
-        //     frame.target_ip_addr.to_string(),
-        //     "TARGET_IP_DST".to_string(),
-        //     10,
-        //     count,
-        // );
     }
 
     fn add(
@@ -233,7 +204,6 @@ impl Capture {
         index: usize,
     ) {
         match payload {
-            Some(Payload::ARP(ref packet)) => Self::capture_arp_frame(table, packet, index),
             Some(Payload::IPv4(ref packet)) => Self::capture_ipv4_packet(table, packet, index),
             Some(Payload::IPv6(ref packet)) => Self::capture_ipv6_packet(table, packet, index),
             _ => {}
@@ -268,12 +238,6 @@ impl Capture {
         frame: &dot11::Frame,
         index: usize,
     ) {
-        table.push(
-            index.to_string(),
-            "N".to_string(),
-            Constraint::Percentage(5),
-            index,
-        );
         Self::capture_dot11_addr(table, &frame.addr1, index);
         if let Some(ref addr) = frame.addr2 {
             Self::capture_dot11_addr(table, &addr, index);
@@ -388,7 +352,7 @@ impl Capture {
                             match key {
                                 Key::Char('q') => sender.send(Event::Disconnected).unwrap_or(()),
                                 Key::Char(' ') => sender.send(Event::Paused).unwrap_or(()),
-                                Key::Insert => sender.send(Event::Selected).unwrap_or(()),
+                                Key::Char('h') => sender.send(Event::Selected).unwrap_or(()),
                                 Key::Down => data.next(false),
                                 Key::Ctrl(key) if key == 'n' => data.next(false),
                                 Key::Ctrl(key) if key == 'p' => data.previous(false),
@@ -418,34 +382,6 @@ impl Capture {
         }
     }
 
-    fn draw_loop(
-        table: &Arc<Mutex<StatefulTable>>,
-        receiver: &Receiver<Event>,
-    ) -> Result<(), io::Error> {
-        let stdout = stdout().into_raw_mode()?;
-        let stdout = MouseTerminal::from(stdout);
-        let stdout = AlternateScreen::from(stdout);
-        let backend = TermionBackend::new(stdout);
-        let mut terminal = {
-            let mut terminal = Terminal::new(backend)?;
-            terminal.hide_cursor()?;
-            terminal
-        };
-
-        draw(&mut terminal, table, receiver)?;
-
-        loop {
-            match receiver.recv() {
-                Ok(Event::Disconnected) => {
-                    terminal.clear()?;
-                    std::process::exit(0);
-                }
-                Ok(Event::Key) | Ok(Event::Tick) => draw(&mut terminal, table, receiver)?,
-                _ => {}
-            }
-        }
-    }
-
     pub fn start(&self) -> Result<(), io::Error> {
         let table = Arc::new(Mutex::new(StatefulTable::new()));
         let (sender, receiver) = bounded::<Event>(5);
@@ -454,7 +390,7 @@ impl Capture {
             scope.spawn(|_| self.capture_packets(&table, &receiver));
             scope.spawn(|_| Self::receive_key(&table, &sender, &receiver));
             scope.spawn(|_| Self::tick(&sender));
-            scope.spawn(|_| Self::draw_loop(&table, &receiver));
+            scope.spawn(|_| draw(&table, &receiver));
         })
         .unwrap();
 
